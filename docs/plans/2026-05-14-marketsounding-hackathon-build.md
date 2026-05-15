@@ -14,6 +14,36 @@
 
 ---
 
+## Prerequisites (verify before starting Chunk 1)
+
+The fresh agent or developer following this plan needs all of:
+
+- **Node.js 20+** and **npm** (`node --version`, `npm --version`)
+- **git** with SSH/HTTPS auth to GitHub
+- **GitHub CLI** (`gh --version`) — for repo creation
+- **AWS CLI v2** (`aws --version`) configured with credentials that can create S3 buckets and connect Amplify apps
+- **AWS account** with Amplify and S3 access; the same account will host the bucket and the Amplify app
+- **Anthropic API key** (`echo $ANTHROPIC_API_KEY` returns something starting with `sk-ant-`)
+- **`jq`** for parsing JSON in smoke tests (`jq --version`)
+- A **GitHub account** to host the repo (Amplify pulls from GitHub)
+
+If any are missing, install them before starting. The plan assumes all are present.
+
+**One nuance to confirm before Chunk 4:** The plan uses `claude-sonnet-4-5` as the default Anthropic model identifier. Anthropic occasionally changes model ID strings — verify the current Sonnet 4.5 ID at https://docs.anthropic.com/en/docs/models-overview before running Task 4.4's smoke test, and update the `ANTHROPIC_MODEL` env var or `lib/anthropic.ts` default if needed.
+
+---
+
+## Architecture note: Lambda runtime constraints
+
+Amplify hosts Next.js API routes as AWS Lambda functions. Two consequences shape this plan:
+
+1. **No background work after a response.** Once an API route returns its response, the Lambda is frozen and any in-flight promises are killed. This rules out the "fire and forget" pattern (return sim_id immediately, fan out in the background). Instead, **`POST /api/sim/run` awaits the entire fan-out** (~25-30 seconds wall-clock at concurrency 5) and returns the completed `SimulationView`. The client shows an inline loading state during the POST and navigates to `/sim/[id]` only after the response. The `maxDuration = 60` setting on the route gives headroom.
+2. **Local filesystem is per-invocation.** Files written via `data/...` paths in production (`STORAGE_BACKEND=s3`) go to S3. Read-only static data (sample event JSON files in `data/sample-events/`) must be bundled into the Lambda package — see Task 1.6 (`outputFileTracingIncludes`).
+
+This is a minor deviation from the spec's `§7.2` "running state with progressive persona avatars" UX. The spec was written before the Lambda implication was fully traced; the simpler "inline loading on landing → navigate to complete results" works on Lambda and lands the demo cleanly.
+
+---
+
 ## File Structure (target end state)
 
 Each file has one clear responsibility. Files that change together live together.
@@ -143,23 +173,15 @@ npm install @anthropic-ai/sdk @aws-sdk/client-s3 p-limit nanoid
 
 Expected: 4 packages added to `dependencies`.
 
-- [ ] **Step 2: Install Tremor**
+- [ ] **Step 2: Install dev dependencies**
 
 ```bash
-npm install @tremor/react
+npm install -D vitest @vitest/ui happy-dom @types/node tsx
 ```
 
-Expected: package added.
+Expected: vitest, helpers, and `tsx` (for running .ts smoke scripts) in `devDependencies`.
 
-- [ ] **Step 3: Install dev dependencies**
-
-```bash
-npm install -D vitest @vitest/ui happy-dom @types/node
-```
-
-Expected: vitest and helpers in `devDependencies`.
-
-- [ ] **Step 4: Add test script to package.json**
+- [ ] **Step 3: Add test script to package.json**
 
 Edit `package.json` `scripts`:
 ```json
@@ -175,7 +197,7 @@ Edit `package.json` `scripts`:
 }
 ```
 
-- [ ] **Step 5: Create vitest.config.ts**
+- [ ] **Step 4: Create vitest.config.ts**
 
 ```ts
 // vitest.config.ts
@@ -196,11 +218,11 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add -A
-git commit -m "chore: install runtime deps (anthropic, aws-sdk, p-limit, tremor) and vitest"
+git commit -m "chore: install runtime deps (anthropic, aws-sdk, p-limit) and dev tools (vitest, tsx)"
 ```
 
 ### Task 1.3: Initialize shadcn/ui
@@ -286,11 +308,47 @@ git add .env.example .gitignore
 git commit -m "chore: add .env.example and gitignore data dirs and .env.local"
 ```
 
-### Task 1.5: Hello world deploy to AWS Amplify
+### Task 1.5: Configure Next.js to bundle data files for Lambda
+
+**Files:**
+- Modify: `next.config.ts`
+
+Next.js's Lambda packager only bundles files that are statically imported. The `data/sample-events/` JSON files are read at runtime via `fs.readFile()` and would otherwise be missing in production. Force-include them.
+
+- [ ] **Step 1: Edit next.config.ts**
+
+```ts
+// next.config.ts
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    // Routes that read sample event JSON files at runtime
+    '/api/events/samples': ['./data/sample-events/**'],
+    '/api/sim/run': ['./data/sample-events/**'],
+    '/api/sim/[id]': ['./data/sample-events/**'],
+    '/sim/_fallback': ['./data/sample-events/**'],
+    '/': ['./data/sample-events/**'],
+  },
+};
+
+export default nextConfig;
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add next.config.ts
+git commit -m "chore: bundle data/sample-events/** into Lambda package via outputFileTracingIncludes"
+```
+
+### Task 1.6: Hello world deploy to AWS Amplify
 
 **Files:**
 - Create: `amplify.yml`
 - Modify: `app/page.tsx` (temporary hello content)
+
+> **⚠ USER ACTION REQUIRED in Step 4** — connecting Amplify to GitHub is a one-time AWS Console setup that cannot be fully automated by an agent. Halt and ask the human to perform this step if you cannot do GUI clicks.
 
 - [ ] **Step 1: Replace app/page.tsx with branded hello**
 
@@ -340,13 +398,28 @@ gh repo create MarketSounding --private --source=. --remote=origin --push
 
 (If `gh` not authenticated, manually create repo at github.com and run `git remote add origin ...; git push -u origin main`.)
 
-- [ ] **Step 4: Connect Amplify in AWS Console**
+- [ ] **Step 4: USER ACTION — Connect Amplify in AWS Console**
 
-In AWS Console → Amplify → Host web app → GitHub → select MarketSounding repo → main branch. Use the auto-detected build settings (`amplify.yml` will be used). Add env var `ANTHROPIC_API_KEY` in Amplify build settings (will be needed later but set now). Click Save and Deploy.
+This step requires a human in the AWS Console GUI:
+1. AWS Console → Amplify → New app → Host web app
+2. Choose GitHub → authorize → select `MarketSounding` repo and `main` branch
+3. Accept the auto-detected `amplify.yml` build settings
+4. In **Environment variables**, add `ANTHROPIC_API_KEY` (real key) — other vars set in Task 9.4
+5. Click Save and Deploy
 
-Expected: build succeeds in ~3-5 minutes. Public URL like `https://main.d1abc.amplifyapp.com` works and shows "MarketSounding — Coming soon."
+Expected: build succeeds in 3-5 min. Note the public URL (looks like `https://main.dXXXXXXXXX.amplifyapp.com`).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Verify deploy with curl**
+
+Replace `<URL>` with the Amplify URL from Step 4:
+
+```bash
+curl -fsS <URL> | grep -q "MarketSounding" && echo "OK" || echo "FAIL"
+```
+
+Expected: `OK`. If `FAIL`, check Amplify build log and fix before continuing.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add amplify.yml app/page.tsx
@@ -968,29 +1041,39 @@ export function getDefaultStorage(): Storage {
 }
 ```
 
-- [ ] **Step 2: Smoke test**
+- [ ] **Step 2: Create smoke script as a .ts file**
 
-Create a temp script and run it:
+Create `scripts/smoke-storage.ts`:
 
-```bash
-cat > /tmp/storage-smoke.mjs << 'EOF'
-import { getDefaultStorage } from './lib/storage-default.ts';
-const s = getDefaultStorage();
-await s.putJson('smoke-test/hello.json', { ok: true });
-console.log(await s.getJson('smoke-test/hello.json'));
-EOF
-npx tsx /tmp/storage-smoke.mjs
+```ts
+// scripts/smoke-storage.ts
+import { getDefaultStorage } from '../lib/storage-default';
+
+async function main() {
+  const s = getDefaultStorage();
+  await s.putJson('smoke-test/hello.json', { ok: true });
+  console.log(await s.getJson('smoke-test/hello.json'));
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
 ```
 
-(Install `tsx` if needed: `npm install -D tsx`)
+- [ ] **Step 3: Run the smoke test**
+
+```bash
+npx tsx scripts/smoke-storage.ts
+```
 
 Expected: prints `{ ok: true }`. Verify `data/smoke-test/hello.json` exists locally.
 
-- [ ] **Step 3: Cleanup smoke artifact + commit**
+- [ ] **Step 4: Cleanup smoke artifact + commit**
 
 ```bash
-rm -rf data/smoke-test /tmp/storage-smoke.mjs
-git add lib/storage-default.ts package.json package-lock.json
+rm -rf data/smoke-test
+git add lib/storage-default.ts scripts/smoke-storage.ts package.json package-lock.json
 git commit -m "feat(lib): default storage factory chooses backend by STORAGE_BACKEND env"
 ```
 
@@ -1471,31 +1554,47 @@ npm test -- persona-agent
 
 Expected: 2/2 pass.
 
-- [ ] **Step 5: Real smoke test against Anthropic API**
+- [ ] **Step 5: Install dotenv (for the .env.local read)**
+
+```bash
+npm install -D dotenv
+```
+
+- [ ] **Step 6: Create smoke script `scripts/smoke-persona-agent.ts`**
+
+```ts
+// scripts/smoke-persona-agent.ts
+import 'dotenv/config';
+import { runPersonaAgent } from '../lib/persona-agent';
+import { PERSONAS } from '../personas';
+import { getSampleEvent } from '../lib/sample-events';
+
+async function main() {
+  const event = await getSampleEvent('sample-fomc-mar-2026');
+  if (!event) throw new Error('Sample event not found');
+  const reaction = await runPersonaAgent(PERSONAS[0], event);
+  console.log(JSON.stringify(reaction, null, 2));
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
+```
+
+- [ ] **Step 7: Run the real smoke test**
 
 ```bash
 # Make sure ANTHROPIC_API_KEY is set in .env.local
-cat > /tmp/persona-smoke.mjs << 'EOF'
-import 'dotenv/config';
-import { runPersonaAgent } from './lib/persona-agent.ts';
-import { PERSONAS } from './personas/index.ts';
-import { getSampleEvent } from './lib/sample-events.ts';
-
-const event = await getSampleEvent('sample-fomc-mar-2026');
-const reaction = await runPersonaAgent(PERSONAS[0], event);
-console.log(JSON.stringify(reaction, null, 2));
-EOF
-npm install -D dotenv
-npx tsx -r dotenv/config /tmp/persona-smoke.mjs
+npx tsx scripts/smoke-persona-agent.ts
 ```
 
 Expected: prints a valid Reaction JSON for GS reacting to the FOMC sample. `status === 'complete'`. `reasoning_md` sounds Goldman-ish.
 
-- [ ] **Step 6: Cleanup smoke artifact + commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-rm /tmp/persona-smoke.mjs
-git add lib/persona-agent.ts tests/persona-agent.test.ts package.json package-lock.json
+git add lib/persona-agent.ts tests/persona-agent.test.ts scripts/smoke-persona-agent.ts package.json package-lock.json
 git commit -m "feat(lib): persona-agent runs Anthropic call and parses Reaction tool_use"
 ```
 
@@ -1774,9 +1873,11 @@ export async function POST(req: Request) {
   }
 
   const simId = newSimId();
-  // Fire-and-forget: don't block the request on the full fan-out.
-  // Client polls /api/sim/[id] for completion.
-  void runSimulation({ simId, event, personas: PERSONAS, storage });
+  // AWAIT the fan-out (~25-30s at concurrency 5). Lambda runtime kills any
+  // promises that outlive the response, so fire-and-forget is not viable.
+  // The client shows an inline loading state during this POST and navigates
+  // to /sim/[id] only after we return. maxDuration=60 gives headroom.
+  await runSimulation({ simId, event, personas: PERSONAS, storage });
 
   return NextResponse.json({ sim_id: simId, event_id: event.id });
 }
@@ -1784,27 +1885,34 @@ export async function POST(req: Request) {
 
 - [ ] **Step 2: Smoke test**
 
+In **terminal 1**, start the dev server:
+
 ```bash
-npm run dev &
-sleep 3
+npm run dev
+# Leave this running
+```
+
+In **terminal 2**, run the smoke test (POST will block ~30s while fan-out completes):
+
+```bash
 curl -X POST http://localhost:3000/api/sim/run \
   -H 'content-type: application/json' \
   -d '{"event_id":"sample-fomc-mar-2026"}'
-# Expected: {"sim_id":"sim_xxx","event_id":"sample-fomc-mar-2026"}
+# Expected (after ~30s): {"sim_id":"sim_xxx","event_id":"sample-fomc-mar-2026"}
 
-# Wait ~30s, then check files
-ls data/sims/sim_xxx/reactions/
+# Verify reaction files exist
+SIM_ID=sim_xxx   # paste the value from above
+ls data/sims/$SIM_ID/reactions/
 # Expected: 5 .json files (one per persona)
-
-# Stop server
-kill %1
 ```
+
+Stop the dev server in terminal 1 with Ctrl-C.
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add app/api/sim/run/route.ts
-git commit -m "feat(api): POST /api/sim/run accepts event_id or raw_text, fires fan-out"
+git commit -m "feat(api): POST /api/sim/run awaits fan-out (Lambda-safe), returns sim_id"
 ```
 
 ### Task 5.4: API route — GET /api/sim/[id]
@@ -1855,19 +1963,24 @@ export async function GET(_req: Request, { params }: Params) {
 
 - [ ] **Step 2: Smoke test**
 
+In **terminal 1**:
+
 ```bash
-npm run dev &
-sleep 3
-# Use a sim_id from a previous run, OR run a new one:
+npm run dev
+```
+
+In **terminal 2** (POST blocks ~30s, then GET is instant):
+
+```bash
 SIM_ID=$(curl -s -X POST http://localhost:3000/api/sim/run \
   -H 'content-type: application/json' \
   -d '{"event_id":"sample-fomc-mar-2026"}' | jq -r .sim_id)
 echo "sim id: $SIM_ID"
-sleep 35
 curl -s "http://localhost:3000/api/sim/$SIM_ID" | jq '.status, .reactions | length'
 # Expected: "complete" and 5
-kill %1
 ```
+
+Stop dev server in terminal 1 with Ctrl-C.
 
 - [ ] **Step 3: Commit**
 
@@ -1913,15 +2026,16 @@ export async function GET() {
 
 - [ ] **Step 3: Smoke test**
 
+In **terminal 1**: `npm run dev`. In **terminal 2**:
+
 ```bash
-npm run dev &
-sleep 3
 curl -s http://localhost:3000/api/personas | jq 'length'
 # Expected: 5
 curl -s http://localhost:3000/api/events/samples | jq 'length'
 # Expected: 3
-kill %1
 ```
+
+Stop dev server with Ctrl-C.
 
 - [ ] **Step 4: Commit**
 
@@ -2016,7 +2130,7 @@ git commit -m "feat(ui): persona row expanded content with simulated chip"
 ```tsx
 // components/persona-table.tsx
 'use client';
-import { useState, useMemo } from 'react';
+import { Fragment, useState, useMemo } from 'react';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -2064,9 +2178,8 @@ export function PersonaTable({ reactions, personas, sortBy = 'persona' }: Props)
           const isOpen = expanded === r.persona_id;
           const isFailed = r.status === 'failed';
           return (
-            <>
+            <Fragment key={r.persona_id}>
               <TableRow
-                key={r.persona_id}
                 className="cursor-pointer hover:bg-muted/40"
                 onClick={() => setExpanded(isOpen ? null : r.persona_id)}
               >
@@ -2092,13 +2205,13 @@ export function PersonaTable({ reactions, personas, sortBy = 'persona' }: Props)
                 </TableCell>
               </TableRow>
               {isOpen && (
-                <TableRow key={`${r.persona_id}-expanded`}>
+                <TableRow>
                   <TableCell colSpan={7} className="p-0">
                     <PersonaRowExpanded reaction={r} persona={p} />
                   </TableCell>
                 </TableRow>
               )}
-            </>
+            </Fragment>
           );
         })}
       </TableBody>
@@ -2134,7 +2247,9 @@ export default async function SimPage({ params }: Props) {
 }
 ```
 
-- [ ] **Step 2: Client view with polling**
+- [ ] **Step 2: Client view (single fetch — no polling, since POST blocks until complete)**
+
+Because `/api/sim/run` awaits the full fan-out, by the time the client navigates to `/sim/[id]` the simulation is already complete. The page does a single fetch on mount, then renders. (A retry-on-not-found loop handles the rare timing edge case where the GET races a still-propagating S3 write.)
 
 ```tsx
 // app/sim/[id]/sim-view.tsx
@@ -2148,7 +2263,8 @@ import { DisclaimerBanner } from '@/components/disclaimer-banner';
 import { PersonaTable } from '@/components/persona-table';
 import type { SimulationView, Persona } from '@/lib/types';
 
-const POLL_MS = 1500;
+const MAX_RETRIES = 5;
+const RETRY_MS = 1000;
 
 export function SimView({ id }: { id: string }) {
   const [data, setData] = useState<SimulationView | null>(null);
@@ -2157,15 +2273,18 @@ export function SimView({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
 
-    const tick = async () => {
+    const fetchOnce = async (attempt = 0): Promise<void> => {
       try {
         const [simRes, persRes] = await Promise.all([
           fetch(`/api/sim/${id}`, { cache: 'no-store' }),
           fetch('/api/personas', { cache: 'no-store' }),
         ]);
+        if (simRes.status === 404 && attempt < MAX_RETRIES) {
+          setTimeout(() => fetchOnce(attempt + 1), RETRY_MS);
+          return;
+        }
         if (!simRes.ok) {
           setError(`Failed to load simulation (${simRes.status})`);
           return;
@@ -2175,23 +2294,17 @@ export function SimView({ id }: { id: string }) {
         if (cancelled) return;
         setData(sim);
         setPersonas(ps);
-        if (sim.status === 'running' || sim.status === 'queued') {
-          timer = setTimeout(tick, POLL_MS);
-        }
       } catch (e) {
         setError(String(e));
       }
     };
-    tick();
+    fetchOnce();
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
     };
   }, [id]);
 
-  if (error) {
-    return <div className="p-8 text-red-600">{error}</div>;
-  }
+  if (error) return <div className="p-8 text-red-600">{error}</div>;
   if (!data) {
     return (
       <div className="max-w-5xl mx-auto p-8 space-y-4">
@@ -2202,10 +2315,6 @@ export function SimView({ id }: { id: string }) {
     );
   }
 
-  const isRunning = data.status === 'running' || data.status === 'queued';
-  const completedCount = data.reactions.length;
-  const totalCount = data.persona_ids.length;
-
   return (
     <main className="max-w-5xl mx-auto p-6 space-y-4">
       <Link href="/" className="text-sm text-muted-foreground hover:underline">
@@ -2213,58 +2322,29 @@ export function SimView({ id }: { id: string }) {
       </Link>
       <h1 className="text-2xl font-semibold">{data.event.title}</h1>
       <p className="text-sm text-muted-foreground">{data.event.event_date}</p>
-      {data.event.summary && (
-        <p className="text-sm">{data.event.summary}</p>
-      )}
+      {data.event.summary && <p className="text-sm">{data.event.summary}</p>}
       <DisclaimerBanner />
 
-      {isRunning ? (
-        <Card>
-          <CardContent className="p-6 space-y-3">
-            <p className="text-sm">
-              Sounding running… {completedCount} of {totalCount} personas complete
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {personas.map((p) => {
-                const done = data.reactions.find((r) => r.persona_id === p.id);
-                return (
-                  <span
-                    key={p.id}
-                    className={`px-2 py-1 rounded text-xs border ${
-                      done ? 'bg-green-50 border-green-300' : 'bg-muted'
-                    }`}
-                  >
-                    {done ? '✓ ' : '⟳ '}{p.short_name}
-                  </span>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                setSortBy((s) => (s === 'persona' ? 'hd_score' : 'persona'))
-              }
-            >
-              Sort by: {sortBy === 'persona' ? 'persona' : 'hawkish ↔ dovish'}
-            </Button>
-          </div>
-          <Card>
-            <CardContent className="p-0">
-              <PersonaTable
-                reactions={data.reactions}
-                personas={personas}
-                sortBy={sortBy}
-              />
-            </CardContent>
-          </Card>
-        </>
-      )}
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            setSortBy((s) => (s === 'persona' ? 'hd_score' : 'persona'))
+          }
+        >
+          Sort by: {sortBy === 'persona' ? 'persona' : 'hawkish ↔ dovish'}
+        </Button>
+      </div>
+      <Card>
+        <CardContent className="p-0">
+          <PersonaTable
+            reactions={data.reactions}
+            personas={personas}
+            sortBy={sortBy}
+          />
+        </CardContent>
+      </Card>
     </main>
   );
 }
@@ -2276,13 +2356,22 @@ export function SimView({ id }: { id: string }) {
 npm run dev
 ```
 
-Open `http://localhost:3000/sim/<a-real-sim-id>` (use one from Chunk 5 smoke test). Verify: running state shows progress chips, then snaps to table. Click row → expands. Click sort → reorders.
+In a separate terminal, kick off a sim and grab the id:
+
+```bash
+SIM_ID=$(curl -s -X POST http://localhost:3000/api/sim/run \
+  -H 'content-type: application/json' \
+  -d '{"event_id":"sample-fomc-mar-2026"}' | jq -r .sim_id)
+echo "open http://localhost:3000/sim/$SIM_ID"
+```
+
+Open the URL. Verify: page loads with table populated. Click row → expands. Click sort → reorders.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add app/sim/
-git commit -m "feat(ui): sim page with polling, running state, and complete-state table"
+git commit -m "feat(ui): sim page renders complete-state table (POST blocks until complete)"
 ```
 
 ---
@@ -2301,13 +2390,18 @@ git commit -m "feat(ui): sim page with polling, running state, and complete-stat
 ```tsx
 // components/sample-event-card.tsx
 'use client';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import type { Event } from '@/lib/types';
 
 export function SampleEventCard({ event }: { event: Event }) {
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
   const onClick = async () => {
+    if (loading) return;
+    setLoading(true);
     const res = await fetch('/api/sim/run', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -2319,13 +2413,20 @@ export function SampleEventCard({ event }: { event: Event }) {
   return (
     <Card
       onClick={onClick}
-      className="cursor-pointer hover:shadow-md transition-shadow"
+      className={`cursor-pointer hover:shadow-md transition-shadow ${
+        loading ? 'opacity-60 pointer-events-none' : ''
+      }`}
     >
       <CardContent className="p-4 space-y-1">
         <p className="font-medium text-sm">{event.title}</p>
         <p className="text-xs text-muted-foreground">{event.event_date}</p>
         {event.summary && (
           <p className="text-xs mt-2 line-clamp-2">{event.summary}</p>
+        )}
+        {loading && (
+          <p className="text-xs text-muted-foreground italic mt-2">
+            Running sounding… (~30s)
+          </p>
         )}
       </CardContent>
     </Card>
@@ -2502,22 +2603,27 @@ export function HawkishDovishStrip({ reactions, personas }: Props) {
 
 (Note: this is plain Tailwind, not Tremor's `Tracker`. Tremor's Tracker is bar-segment based and harder to bend to "labeled dots on a continuous line." Plain CSS gives a cleaner result faster.)
 
-- [ ] **Step 2: Insert above table in sim-view.tsx**
+- [ ] **Step 2: Add the import to `app/sim/[id]/sim-view.tsx`**
 
-In `app/sim/[id]/sim-view.tsx`, after the closing `<DisclaimerBanner />`, in the `else` (complete) branch, insert before the sort button:
+Add this single line after the existing `PersonaTable` import:
+
+```ts
+import { HawkishDovishStrip } from '@/components/hawkish-dovish-strip';
+```
+
+- [ ] **Step 3: Insert the strip JSX into `sim-view.tsx`**
+
+In the JSX, between `<DisclaimerBanner />` and the `<div className="flex justify-end">` block, insert:
 
 ```tsx
-import { HawkishDovishStrip } from '@/components/hawkish-dovish-strip';
-
-// inside the JSX, complete-state branch, BEFORE the flex justify-end div:
 <HawkishDovishStrip reactions={data.reactions} personas={personas} />
 ```
 
-- [ ] **Step 3: Smoke test**
+- [ ] **Step 4: Smoke test**
 
 Open a completed sim. Verify dots appear on the strip, hover tooltips show name + score, dots are roughly distributed.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add components/hawkish-dovish-strip.tsx app/sim/\[id\]/sim-view.tsx
@@ -2654,21 +2760,35 @@ git commit -m "chore(ui): set MarketSounding metadata in root layout"
 - Create: `data/sample-events/_fallback-sim.json`
 - Create: `app/sim/_fallback/page.tsx`
 
-- [ ] **Step 1: Generate the fallback**
+- [ ] **Step 1: Verify `jq` is installed**
 
 ```bash
-# Run a real sim against FOMC sample, then capture the result
+jq --version
+```
+
+If "command not found", install it (`brew install jq` on macOS, `apt install jq` on Linux). Don't proceed without it.
+
+- [ ] **Step 2: Generate the fallback**
+
+In **terminal 1**: `npm run dev`. In **terminal 2**:
+
+```bash
+# POST blocks ~30s while the fan-out completes
 SIM_ID=$(curl -s -X POST http://localhost:3000/api/sim/run \
   -H 'content-type: application/json' \
   -d '{"event_id":"sample-fomc-mar-2026"}' | jq -r .sim_id)
-sleep 35
+
+# Fetch the merged view and save it as the fallback
 curl -s "http://localhost:3000/api/sim/$SIM_ID" > data/sample-events/_fallback-sim.json
-# Inspect — it should contain status='complete', 5 reactions, full event
+
+# Verify it's complete with 5 reactions
 jq '.status, .reactions | length' data/sample-events/_fallback-sim.json
 # Expected: "complete" and 5
 ```
 
-- [ ] **Step 2: Create the fallback route**
+Stop dev server with Ctrl-C.
+
+- [ ] **Step 3: Create the fallback route**
 
 ```tsx
 // app/sim/_fallback/page.tsx
@@ -2720,7 +2840,7 @@ export function FallbackView({ data }: { data: SimulationView }) {
 }
 ```
 
-- [ ] **Step 3: Smoke test**
+- [ ] **Step 4: Smoke test**
 
 ```bash
 npm run dev
@@ -2728,112 +2848,22 @@ npm run dev
 
 Open `http://localhost:3000/sim/_fallback`. Verify the page renders the cached sim instantly, no LLM call.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add data/sample-events/_fallback-sim.json app/sim/_fallback/
 git commit -m "feat(demo): /sim/_fallback serves a pre-baked sim, demo-safe under API outage"
 ```
 
-### Task 9.2: Recent simulations list (optional polish)
+### Task 9.2: Recent simulations list — DEFERRED
 
-**Files:**
-- Modify: `app/page.tsx` to also load recent sims
-- Modify: `app/landing.tsx` to render a list
+This was originally planned as bonus polish but has been cut from Phase 1. Reasons:
 
-- [ ] **Step 1: Add a list-recent-sims helper**
+- The local-FS `list` adapter doesn't recurse into per-sim subdirectories without an additional `listDirs` helper, and adding one cleanly across both backends (local + S3 with `Delimiter='/'` + `CommonPrefixes`) is non-trivial work for marginal demo value.
+- Sample event cards already give the demo its starting point; "recent sims" is a returning-user feature, and the demo audience is first-time visitors.
+- The `/sim/_fallback` route covers the "show me a result without waiting" demo need.
 
-```ts
-// lib/recent-sims.ts
-import type { Simulation, Event } from '@/lib/types';
-import { getDefaultStorage } from '@/lib/storage-default';
-import { getSampleEvent } from '@/lib/sample-events';
-
-export type RecentSim = {
-  id: string;
-  event_title: string;
-  created_at: string;
-};
-
-export async function loadRecentSims(limit = 5): Promise<RecentSim[]> {
-  const storage = getDefaultStorage();
-  const keys = await storage.list('sims/');
-  // Local backend lists files only at top level; we want sims/<id>/sim.json.
-  // Workaround: list each sim's sim.json by scanning sub-prefixes.
-  // For simplicity, on local FS we re-scan; on S3 list returns nested keys.
-  const simKeys = keys.filter((k) => k.endsWith('/sim.json'));
-  const sims = (
-    await Promise.all(simKeys.map((k) => storage.getJson<Simulation>(k)))
-  ).filter((s): s is Simulation => s !== null);
-
-  const out: RecentSim[] = [];
-  for (const s of sims) {
-    let title = 'Pasted event';
-    const sample = await getSampleEvent(s.event_id);
-    if (sample) title = sample.title;
-    else {
-      const ev = await storage.getJson<Event>(`events/${s.event_id}.json`);
-      if (ev) title = ev.title;
-    }
-    out.push({ id: s.id, event_title: title, created_at: s.created_at });
-  }
-  out.sort((a, b) => b.created_at.localeCompare(a.created_at));
-  return out.slice(0, limit);
-}
-```
-
-(Note: the local-backend `list` only returns files in the directly-listed prefix. For `loadRecentSims` to work on local FS, you may need to extend the local `list` impl to recurse one level, OR call `list` on each sim subdir. For hackathon: an acceptable shortcut is to add a `listDirs(prefix)` helper to storage that returns sub-directory names, and for S3 use the existing list since S3 returns nested paths flat.)
-
-- [ ] **Step 2: Extend storage with listDirs (only used on local)**
-
-In `lib/storage.ts`, add to the `Storage` type:
-
-```ts
-listDirs(prefix: string): Promise<string[]>;
-```
-
-Local impl:
-```ts
-async listDirs(prefix) {
-  const abs_prefix = abs(prefix);
-  try {
-    const entries = await readdir(abs_prefix);
-    const out: string[] = [];
-    for (const entry of entries) {
-      const full = path.join(abs_prefix, entry);
-      const s = await stat(full);
-      if (s.isDirectory()) out.push(path.posix.join(prefix.replace(/\\/g, '/'), entry));
-    }
-    return out;
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    throw err;
-  }
-}
-```
-
-S3 impl: re-use `list` and reduce to unique parent prefixes. Or just stub as `return []` for hackathon (local only matters for dev recent list; production demo will use `_fallback`).
-
-Update `loadRecentSims` to use `listDirs('sims/')` to find sim ids, then `getJson` each.
-
-- [ ] **Step 3: Render in landing**
-
-In `app/page.tsx`:
-```tsx
-import { loadRecentSims } from '@/lib/recent-sims';
-// ...
-const recent = await loadRecentSims();
-return <Landing samples={samples} recent={recent} />;
-```
-
-In `app/landing.tsx`, accept `recent` prop and render a `<section>` with `<Link>` to each.
-
-- [ ] **Step 4: Commit (or skip if behind schedule)**
-
-```bash
-git add lib/recent-sims.ts lib/storage.ts app/page.tsx app/landing.tsx
-git commit -m "feat(ui): recent simulations list on landing page"
-```
+If you have spare time after Task 9.5 and want to add this back, the shape is: add `listDirs(prefix)` to the `Storage` interface (local: `readdir` + filter `isDirectory()`; S3: `ListObjectsV2` with `Delimiter: '/'` reading `CommonPrefixes`), add a `lib/recent-sims.ts` that lists `sims/`, fetches each `sim.json`, joins event titles, sorts by `created_at`, and renders a list section on the landing page.
 
 ### Task 9.3: README
 
@@ -2894,32 +2924,76 @@ git commit -m "docs: hackathon README with quickstart and demo notes"
 
 ### Task 9.4: Final Amplify deploy + smoke
 
-- [ ] **Step 1: Set Amplify env vars**
+> **⚠ USER ACTION REQUIRED in Steps 1 + 3** — Amplify env vars and IAM policy attachment are AWS Console / IAM operations. Steps 2 (bucket creation) and 4-5 (deploy verification) are CLI-automatable.
 
-In AWS Console → Amplify → App settings → Environment variables, add:
-- `ANTHROPIC_API_KEY` (your Claude key)
-- `ANTHROPIC_MODEL` = `claude-sonnet-4-5`
-- `STORAGE_BACKEND` = `s3`
-- `S3_BUCKET` = your bucket name (create one in S3 first)
-- `AWS_REGION` = `us-east-1`
+- [ ] **Step 1: USER ACTION — Set Amplify env vars**
 
-- [ ] **Step 2: Create the S3 bucket + IAM role**
+AWS Console → Amplify → your app → Hosting → Environment variables → Manage variables. Add:
+
+| Variable | Value |
+|---|---|
+| `ANTHROPIC_API_KEY` | your real Claude key |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4-5` (verify current ID at docs.anthropic.com) |
+| `STORAGE_BACKEND` | `s3` |
+| `S3_BUCKET` | `marketsounding-data` (or your chosen name) |
+| `AWS_REGION` | `us-east-1` (or your chosen region) |
+| `MAX_PARALLEL_PERSONAS` | `5` |
+
+Click Save. (No redeploy yet — that happens after Step 3.)
+
+- [ ] **Step 2: Create the S3 bucket**
 
 ```bash
 aws s3 mb s3://marketsounding-data --region us-east-1
 ```
 
-In Amplify, the build IAM role needs `s3:PutObject`, `s3:GetObject`, `s3:ListBucket` on `marketsounding-data` and `marketsounding-data/*`. Add an inline policy.
+Expected: `make_bucket: marketsounding-data`. If the name is taken globally, pick another name and update the env var in Step 1.
 
-- [ ] **Step 3: Push and verify deploy**
+- [ ] **Step 3: USER ACTION — Attach IAM policy to the Amplify app's compute role**
+
+Find the Amplify app's compute role: AWS Console → Amplify → your app → App settings → IAM roles. Note the role ARN (looks like `arn:aws:iam::ACCOUNT:role/amplifyconsole-backend-role-XXXX` or similar). Then:
+
+```bash
+# Replace ROLE_NAME with the role name from above (without ARN prefix)
+ROLE_NAME=amplifyconsole-backend-role-XXXX
+
+cat > /tmp/marketsounding-s3-policy.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Resource": "arn:aws:s3:::marketsounding-data/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::marketsounding-data"
+    }
+  ]
+}
+EOF
+
+aws iam put-role-policy \
+  --role-name "$ROLE_NAME" \
+  --policy-name MarketSoundingS3Access \
+  --policy-document file:///tmp/marketsounding-s3-policy.json
+```
+
+Expected: command returns silently (success). Verify with `aws iam list-role-policies --role-name "$ROLE_NAME"`.
+
+If your Amplify app uses a different runtime model (e.g., compute via SSR Lambdas with their own role), look up "Amplify SSR compute role" in the Amplify docs and apply the policy to that role instead.
+
+- [ ] **Step 4: Push and verify deploy**
 
 ```bash
 git push origin main
 ```
 
-Watch Amplify build log. Expected: build succeeds in 3-5 min.
+Watch Amplify build log. Expected: build succeeds in 3-5 min. (After env vars/IAM changes, manually trigger a redeploy from the Amplify console if needed: Hosting → Deployments → Redeploy this version.)
 
-- [ ] **Step 4: End-to-end smoke from clean browser**
+- [ ] **Step 5: End-to-end smoke from clean browser**
 
 Open the Amplify URL in an incognito window:
 1. Click an FOMC sample card → routes to /sim/...
@@ -2931,7 +3005,7 @@ Open the Amplify URL in an incognito window:
 
 If anything broken: fix, push, retry.
 
-- [ ] **Step 5: Commit any final fixes**
+- [ ] **Step 6: Commit any final fixes**
 
 ### Task 9.5: Demo prep
 
@@ -2957,10 +3031,9 @@ Right before going on stage, run one sim from the live URL to warm the Lambda + 
 
 If you fall behind, cut in this order (re-order tasks accordingly):
 
-1. **Task 9.2** (recent simulations list) — bonus polish, not in pitch
+1. **Task 9.2** (recent simulations list) — already deferred by default
 2. **Task 8.1** (hawkish/dovish strip) — table alone is still demo-able
 3. **Task 8.2** (About page) — can answer judge questions verbally
-4. **Task 8.3** (loading animation polish) — basic polling chips already exist
 
 Never cut: deploy (Task 9.4), fallback (Task 9.1), README quickstart (Task 9.3).
 
