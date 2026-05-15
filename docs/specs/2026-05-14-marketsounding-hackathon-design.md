@@ -103,8 +103,8 @@ Sample events are critical: judges will not paste anything during the pitch. Cli
 | Charts | Tremor |
 | LLM | Anthropic SDK (Claude Sonnet 4.5) — direct API, **not** Bedrock |
 | Persona storage | TypeScript file `personas/index.ts` (no DB) |
-| Sim/event storage | JSON files in `/data/` directory + in-memory cache (no DB) |
-| Hosting | AWS Amplify (auto-deploy from GitHub) |
+| Sim/event storage | **S3** (one JSON object per simulation + per reaction). Local dev uses `./data/` filesystem when `AWS_*` env vars are absent. |
+| Hosting | AWS Amplify (auto-deploy from GitHub). API routes run in Lambda — ephemeral filesystem, no shared in-memory state across invocations |
 | Auth | None |
 | Observability | Console logs + Amplify build logs |
 
@@ -112,8 +112,8 @@ Sample events are critical: judges will not paste anything during the pitch. Cli
 
 - **Next.js full-stack** — single language, single deploy, fastest scaffold
 - **Anthropic direct (not Bedrock)** — Bedrock model access provisioning + IAM + Converse API setup costs 4-6 hours; Anthropic SDK is 1 line. Migrate post-hackathon.
-- **AWS Amplify** — meets the "AWS infrastructure" constraint while staying as simple as Vercel for a Next.js app
-- **JSON files for persistence** — for 48 hours of demo data, DynamoDB is overkill. Migrate post-hackathon.
+- **AWS Amplify** — meets the "AWS infrastructure" constraint while staying as simple as Vercel for a Next.js app. Note: API routes run in Lambda, so storage **must** be external (S3) — the local filesystem is per-invocation and not durable.
+- **S3 for persistence** — small JSON objects per simulation/reaction. Free tier comfortably covers a hackathon demo. Avoids DynamoDB schema/IAM setup. Survives serverless invocation boundaries (which a local JSON file would not).
 - **shadcn + Tremor** — shadcn for the table/buttons/cards, Tremor for the one chart that matters
 
 ### 4.3 High-level architecture
@@ -142,12 +142,17 @@ Sample events are critical: judges will not paste anything during the pitch. Cli
             │  └────────────────┘  └───────────────────┘  │
             └─────────────────────────────────────────────┘
                        │                       │
-              ┌────────┴────────┐    ┌─────────┴────────┐
-              │  Anthropic API  │    │  /data/*.json    │
-              └─────────────────┘    └──────────────────┘
+              ┌────────┴────────┐    ┌─────────┴────────────────┐
+              │  Anthropic API  │    │  S3 (prod) / ./data (dev)│
+              └─────────────────┘    │  sims/<id>/sim.json      │
+                                     │  sims/<id>/reactions/    │
+                                     │     <persona_id>.json    │
+                                     └──────────────────────────┘
 ```
 
-**Concurrency:** N personas fire in parallel via `p-limit(5)` to stay under the Anthropic rate limit. ~25-30s wall-clock for 5 personas.
+**Concurrency:** N personas fire in parallel via `p-limit(5)` to stay under the Anthropic rate limit. ~25-30s wall-clock for 5 personas. **Each persona writes its own reaction object** (`sims/<id>/reactions/<persona_id>.json`), so parallel writes never clobber each other. The simulation metadata file (`sims/<id>/sim.json`) is written only by the orchestrator (not by persona workers) — single-writer, no mutex needed.
+
+**Reading a sim:** `GET /api/sim/[id]` reads `sim.json` for status + lists the `reactions/` prefix, fetching each reaction object. Returns the merged view. This pattern works identically on local FS and S3, and is safe under any serverless runtime.
 
 ---
 
@@ -164,7 +169,6 @@ export type Persona = {
   profile_md: string;               // ~1 page house-view brief
   hawkish_dovish_bias: number;      // -1..+1 prior
   avatar_text: string;              // 'GS' (2 chars)
-  active: boolean;
 };
 ```
 
@@ -182,7 +186,7 @@ export type Event = {
 };
 ```
 
-### 5.3 Simulation (JSON file in `data/sims/<id>.json`)
+### 5.3 Simulation (storage: `sims/<id>/sim.json` in S3 or local `./data/`)
 
 ```ts
 export type Simulation = {
@@ -190,30 +194,32 @@ export type Simulation = {
   event_id: string;
   status: 'queued' | 'running' | 'complete' | 'failed';
   persona_ids: string[];
-  reactions: Reaction[];            // populated as personas complete
+  // reactions are NOT embedded — each is its own object at
+  // sims/<id>/reactions/<persona_id>.json — see §4.3
   created_at: string;
   completed_at: string | null;
   error: string | null;
 };
 ```
 
-### 5.4 Reaction (embedded in Simulation)
+### 5.4 Reaction (storage: `sims/<id>/reactions/<persona_id>.json` — one object per persona)
 
 ```ts
 export type Reaction = {
   persona_id: string;
-  status: 'pending' | 'complete' | 'failed';
+  status: 'complete' | 'failed';    // file only exists once persona is done
   rate_path_view: string;           // 1 sentence
   balance_sheet_view: string;       // 1 sentence
   risk_asset_view: string;          // 1 sentence
   key_concerns: string[];           // 1-3 strings
   hawkish_dovish_score: number;     // -1..+1
   confidence: number;               // 0..1
-  surprise_score: number;           // 0..1
   reasoning_md: string;             // 2-3 paragraphs in persona voice
-  error: string | null;
+  error: string | null;             // populated only on status='failed'
 };
 ```
+
+**UI handling of failed reactions:** If a reaction file has `status='failed'`, the table renders that row with em-dashes in the data columns and a small `simulation failed` badge in the persona cell. Sims continue without it; partial results are honest results.
 
 ---
 
@@ -237,10 +243,12 @@ export type Reaction = {
               │
               ├─ Call Claude with tool-use / structured output mode
               │
-              └─ Append Reaction to simulation.reactions; persist JSON
+              └─ Write reaction to sims/<id>/reactions/<persona_id>.json
+                  (each persona writes its own object — no contention)
 
-4. COMPLETE   When all reactions done → simulation.status = 'complete'
-              Save final JSON; UI polling sees this, renders results
+4. COMPLETE   Orchestrator (NOT persona workers) writes sims/<id>/sim.json
+              with status='complete' and completed_at timestamp.
+              UI polling sees the status flip and renders results.
 ```
 
 ### 6.1 Prompt template
@@ -268,7 +276,7 @@ EVENT (occurring {event.event_date}):
 {event.summary}
 
 FULL TEXT:
-{event.raw_text}
+{event.raw_text}                # truncated to 12000 chars to fit Claude context comfortably
 
 Respond with the structured JSON only.
 ```
@@ -361,14 +369,14 @@ Brief project description, the production roadmap diagram (Phases 1-4), and cred
 | Block | Hours | Goal |
 |---|---|---|
 | 0. Setup | 0-2 | Scaffold Next.js + shadcn + Tremor; install Anthropic SDK; deploy "Hello World" to Amplify *first* (de-risk deployment); set `ANTHROPIC_API_KEY` env var |
-| 1. Personas | 2-5 | Author 5 persona profiles in `personas/index.ts` with Claude's help; define Reaction TypeScript schema |
-| 2. Sim engine | 5-10 | `/api/sim/run`, `/api/sim/[id]`; structured-output prompt; parallel fan-out via p-limit; JSON file storage; smoke test with curl |
+| 1. Personas + sample events | 2-5 | Author 5 persona profiles in `personas/index.ts`; author the 3 sample event JSON files in `data/sample-events/`; define Reaction TypeScript schema. **Sample events are authored here, not in Block 8** — the demo depends on them. |
+| 2. Sim engine | 5-10 | `/api/sim/run`, `/api/sim/[id]`; structured-output prompt; parallel fan-out via p-limit; S3 + local-filesystem storage adapter; smoke test with curl |
 | 3. Results page | 10-18 | `/sim/[id]` with table, expandable rows, hawkish/dovish color coding, status polling |
 | 4. Landing page | 18-24 | `/` with hero + 3 sample event cards + recent simulations list |
 | 5. Tremor strip | 24-28 | Hawkish/dovish spectrum bar across top of results; click to sort |
 | 6. Loading polish | 28-32 | Staggered persona-avatar animation, looks alive |
 | 7. About page | 32-36 | Brief project page with roadmap diagram for judges |
-| 8. Sample events | 36-40 | Bake in 3 events as JSON; pretty cards on landing |
+| 8. Polish + extras | 36-40 | Sample event UI cards on landing (events themselves authored in Block 1); recent simulations list; mobile breakpoints |
 | 9. AWS deploy + smoke | 40-44 | Final Amplify deploy; full demo flow on the live URL; check from clean browser |
 | 10. Demo prep | 44-48 | Pitch script, slides if needed, rehearse the demo flow 3x, fix anything that breaks |
 
@@ -411,7 +419,7 @@ These do not run, are not imported, and are not built. They exist to save re-der
 
 | Risk | Mitigation |
 |---|---|
-| Anthropic API rate limit hit during demo | Pre-warm with sample sim during setup; cache one fully-completed sim as a "fallback" demo result |
+| Anthropic API rate limit hit during demo | Pre-warm with sample sim during setup; bake a fully-completed simulation at `data/sample-events/_fallback-sim.json` and wire `/sim/_fallback` route to serve it directly without calling the LLM. Document in README. |
 | AWS Amplify deploy breaks late | Deploy "Hello World" in Hour 0-2, not Hour 40; iterate deploys throughout |
 | Persona output sounds too generic | Write *opinionated* profiles with specific named voices, recent calls, distinctive positioning |
 | Internet flaky during pitch | Pre-record a 60-second demo video as backup |
@@ -478,14 +486,18 @@ The following are intentionally deferred to post-hackathon (see `production-road
 │   ├── anthropic.ts                    # Claude client wrapper
 │   ├── simulation-runner.ts            # orchestration
 │   ├── persona-agent.ts                # one-persona LLM call
-│   ├── storage.ts                      # JSON file read/write
+│   ├── storage.ts                      # S3 + local-FS adapter (chooses by env)
 │   └── prompts.ts                      # prompt templates
 ├── personas/
 │   └── index.ts                        # 5 persona records
 ├── data/
-│   ├── sample-events/                  # 3 baked-in events
-│   ├── events/                         # user-submitted events
-│   └── sims/                           # simulation results
+│   ├── sample-events/                  # 3 baked-in events + _fallback-sim.json
+│   ├── events/                         # user-submitted events (local dev only)
+│   └── sims/                           # simulation results (local dev only)
+│       └── <sim_id>/
+│           ├── sim.json                # metadata + status
+│           └── reactions/
+│               └── <persona_id>.json   # one file per persona reaction
 ├── docs/
 │   ├── specs/
 │   │   ├── 2026-05-14-marketsounding-hackathon-design.md   # this doc
