@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "UI/UX Design System Generator",
+  "description": "Manually trigger to generate professional design system recommendations (style, colors, typography, effects, anti-patterns) for MarketSounding. Run this before starting any frontend/UI work to get the design system context.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "python .kiro/skills/ui-ux-pro-max/scripts/search.py \"fintech dashboard data-dense dark mode professional\" --design-system -p \"MarketSounding\""
+  }
+}

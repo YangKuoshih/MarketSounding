@@ -1,0 +1,17 @@
+﻿{
+  "enabled": true,
+  "name": "UI Design Quality Review",
+  "description": "Reviews UI component code against professional design standards whenever a component or page file is created. Enforces no-emoji rule, Lucide icons only, D3/Anime.js for charts/animations, light+dark mode support.",
+  "version": "1",
+  "when": {
+    "type": "fileCreated",
+    "patterns": [
+      "components/**/*.tsx",
+      "app/**/*.tsx"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Review this newly created UI file against .kiro/steering/ui-design-standards.md. CRITICAL CHECKS: 1) ZERO EMOJIS — if any emoji character exists, replace with Lucide React icon immediately. 2) Light + dark mode — verify component uses theme tokens (CSS variables or Tailwind dark: prefix), not hardcoded colors. 3) Icons — only lucide-react imports allowed. 4) Charts — must use D3.js, not Tremor/Recharts/Chart.js. 5) Animations — use Anime.js for micro-interactions. 6) Typography — Fira Code for data, Fira Sans for UI text. 7) Accessibility — 4.5:1 contrast in BOTH themes, focus rings, aria-labels. 8) Data display — right-align numbers, tabular-nums font-feature. Fix any violations immediately."
+  }
+}

@@ -1,0 +1,29 @@
+# Terraform state — contains secrets, resource IDs, outputs
+*.tfstate
+*.tfstate.backup
+.terraform.tfstate.lock.info
+
+# Terraform provider plugins (large, downloaded on init)
+.terraform/
+
+# Lock file (optional — some teams commit this, some don't)
+# Uncomment if you want to pin provider versions in source:
+# .terraform.lock.hcl
+
+# Secret variable files — NEVER commit
+*.auto.tfvars
+secrets.tfvars
+*.secret.tfvars
+
+# Override files (local developer overrides)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Plan files (may contain secrets in output)
+*.tfplan
