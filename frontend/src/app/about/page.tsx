@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "motion/react";
+import { useRef } from "react";
+import { motion, useScroll, useTransform } from "motion/react";
 import {
   ArrowRight,
   Brain,
@@ -12,6 +13,69 @@ import {
   GitBranch,
 } from "lucide-react";
 import { MarketingShell } from "@/components/marketing/marketing-shell";
+
+const dealers = [
+  {
+    id: "gs",
+    short: "GS",
+    name: "Goldman Sachs",
+    bias: -0.2,
+    color: "#60a5fa",
+    keyVoice: "David Mericle · Jan Hatzius",
+    personality:
+      "Model-driven and quantitative. GS builds proprietary frameworks (Financial Conditions Index, Current Activity Indicator) and leans on data surprises relative to consensus. Calls tend to be early and contrarian. Comfortable with conditional probabilistic forecasts.",
+    voiceSample:
+      "Our FCI model suggests policy is restrictive by 75bp relative to neutral. The risk-reward favors a cut conditional on the next two payrolls prints.",
+  },
+  {
+    id: "jpm",
+    short: "JPM",
+    name: "JP Morgan",
+    bias: 0.1,
+    color: "#94a3b8",
+    keyVoice: "Michael Feroli · Bruce Kasman",
+    personality:
+      "Labor-market focused and methodical. JPM anchors views to payrolls breadth, JOLTS quits rate, and wage growth. Balanced, institutional tone. Prefers to wait for clear confirmation before committing to a directional call.",
+    voiceSample:
+      "Wage growth north of 4% is structurally inconsistent with the 2% target. We need evidence — not projections — of labor market softening before moving.",
+  },
+  {
+    id: "ms",
+    short: "MS",
+    name: "Morgan Stanley",
+    bias: 0.5,
+    color: "#f87171",
+    keyVoice: "Ellen Zentner · Mike Wilson",
+    personality:
+      "Contrarian and tail-risk focused. MS builds scenario trees and consistently flags risks the market underprices. Often the most hawkish voice in the room, emphasizing financial conditions loosening and the risk of premature easing.",
+    voiceSample:
+      "Financial conditions have unwound 50bp of effective tightening since October. The market is priced for perfection — that concerns us more than the data.",
+  },
+  {
+    id: "citi",
+    short: "Citi",
+    name: "Citi",
+    bias: 0.0,
+    color: "#94a3b8",
+    keyVoice: "Andrew Hollenhorst",
+    personality:
+      "Print-reactive and consensus-leaning. Citi tracks high-frequency data series closely and adjusts quickly to incoming prints. Tends toward the median view but will break from consensus when the data clearly supports it.",
+    voiceSample:
+      "Initial claims trending higher, ISM services contracting, consumer confidence falling — the data is telling a coherent story the Fed hasn't fully acknowledged yet.",
+  },
+  {
+    id: "bofa",
+    short: "BofA",
+    name: "Bank of America",
+    bias: 0.3,
+    color: "#fb923c",
+    keyVoice: "Michael Gapen",
+    personality:
+      "Consumer-spending anchored with a hawkish lean. BofA's proprietary card transaction data gives them a direct read on consumer activity that often diverges from headline surveys. Resistant to slowdown narratives until their own data confirms it.",
+    voiceSample:
+      "Our card data shows no signs of the slowdown others are forecasting. The savings drawdown narrative is overstated. We see one cut, maybe, and only if the data forces it.",
+  },
+];
 
 const stack = [
   {
@@ -77,38 +141,55 @@ const stack = [
 ];
 
 export default function AboutPage() {
+  const heroRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"],
+  });
+
+  const heroY = useTransform(scrollYProgress, [0, 1], ["0%", "25%"]);
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
+  const bgY = useTransform(scrollYProgress, [0, 1], ["0%", "50%"]);
+
   return (
     <MarketingShell>
-      <section className="border-b border-border">
+      <section ref={heroRef} className="relative overflow-hidden border-b border-border">
+        {/* Parallax background gradient */}
+        <motion.div
+          style={{ y: bgY }}
+          className="absolute inset-0 -z-10 bg-gradient-to-b from-primary/6 via-primary/2 to-transparent pointer-events-none"
+        />
         <div className="mx-auto max-w-5xl px-6 py-20">
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
-            className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3"
-          >
-            About
-          </motion.p>
-          <motion.h1
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="text-4xl font-semibold tracking-tight sm:text-5xl"
-          >
-            A market sounding desk that runs in agent-time.
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.05 }}
-            className="mt-6 text-lg text-muted-foreground leading-relaxed"
-          >
-            MarketSounding models how primary dealers respond to market events
-            through a multi-round AI roundtable. Inspired by MiroFish&apos;s
-            multi-agent simulation framework, the system fuses topic-driven web
-            research, persona-grounded LLM reasoning, and convergence detection
-            to surface dealer perspectives in under 90 seconds.
-          </motion.p>
+          <motion.div style={{ y: heroY, opacity: heroOpacity }}>
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3"
+            >
+              About
+            </motion.p>
+            <motion.h1
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="text-4xl font-semibold tracking-tight sm:text-5xl"
+            >
+              A market sounding desk that runs in agent-time.
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.05 }}
+              className="mt-6 text-lg text-muted-foreground leading-relaxed"
+            >
+              MarketSounding models how primary dealers respond to market events
+              through a multi-round AI roundtable. Inspired by MiroFish&apos;s
+              multi-agent simulation framework, the system fuses topic-driven web
+              research, persona-grounded LLM reasoning, and convergence detection
+              to surface dealer perspectives in under 90 seconds.
+            </motion.p>
+          </motion.div>
         </div>
       </section>
 
@@ -148,6 +229,86 @@ export default function AboutPage() {
                 for accuracy against public dealer research.
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Dealer personas */}
+      <section className="border-b border-border">
+        <div className="mx-auto max-w-5xl px-6 py-16">
+          <div className="mb-10">
+            <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">
+              The Dealers
+            </p>
+            <h2 className="text-2xl font-semibold tracking-tight">
+              Five desks. Five distinct voices.
+            </h2>
+            <p className="mt-3 text-base text-muted-foreground leading-relaxed max-w-2xl">
+              Each agent is grounded in publicly documented house views, characteristic reasoning styles, and a calibrated hawkish/dovish default. They don&apos;t just react — they challenge each other.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {dealers.map((d, i) => (
+              <motion.div
+                key={d.id}
+                initial={{ opacity: 0, y: 8 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.3, delay: i * 0.06 }}
+                className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5"
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border-2 font-mono text-[10px] font-bold"
+                        style={{ borderColor: d.color, color: d.color }}
+                      >
+                        {d.short}
+                      </span>
+                      <h3 className="text-sm font-semibold">{d.name}</h3>
+                    </div>
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                      {d.keyVoice}
+                    </p>
+                  </div>
+                  {/* Bias indicator */}
+                  <div className="text-right shrink-0">
+                    <span
+                      className="font-mono text-sm font-semibold"
+                      style={{ color: d.color }}
+                    >
+                      {d.bias > 0 ? "+" : ""}{d.bias.toFixed(1)}
+                    </span>
+                    <p className="text-[10px] font-mono text-muted-foreground mt-0.5">
+                      {d.bias > 0.2 ? "Hawkish" : d.bias < -0.1 ? "Dovish" : "Neutral"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Bias bar */}
+                <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${((d.bias + 1) / 2) * 100}%`,
+                      background: d.color,
+                    }}
+                  />
+                </div>
+
+                {/* Personality */}
+                <p className="text-xs text-muted-foreground leading-relaxed flex-1">
+                  {d.personality}
+                </p>
+
+                {/* Voice sample */}
+                <blockquote className="border-l-2 pl-3 text-xs italic text-muted-foreground/80 leading-relaxed" style={{ borderColor: d.color }}>
+                  &ldquo;{d.voiceSample}&rdquo;
+                </blockquote>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>

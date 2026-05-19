@@ -429,7 +429,7 @@ function RunningView({
           </div>
 
           {/* Dealer indicators */}
-          <div className="mt-6 flex justify-center gap-6">
+          <div className="mt-6 grid grid-cols-5 gap-3">
             {DEALERS.map((dealer, i) => {
               const isComplete = i < completedDealers;
               const isActive = i === completedDealers;
@@ -437,35 +437,43 @@ function RunningView({
                 <motion.div
                   key={dealer.id}
                   initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{
-                    opacity: 1,
-                    scale: isComplete ? [1, 1.1, 1] : 1,
-                  }}
-                  transition={{
-                    duration: isComplete ? 0.4 : 0.3,
-                    delay: i * 0.05,
-                  }}
-                  className="flex flex-col items-center gap-2"
+                  animate={{ opacity: 1, scale: isComplete ? [1, 1.1, 1] : 1 }}
+                  transition={{ duration: isComplete ? 0.4 : 0.3, delay: i * 0.05 }}
+                  className={`flex flex-col items-center gap-2 rounded-lg border p-3 transition-colors ${
+                    isComplete
+                      ? "border-success/40 bg-success/5"
+                      : isActive
+                        ? "border-primary/60 bg-primary/5"
+                        : "border-border bg-card"
+                  }`}
                 >
                   <div
-                    className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-colors ${
+                    className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
                       isComplete
                         ? "border-success bg-success/10"
                         : isActive
                           ? "border-primary bg-primary/10"
-                          : "border-border bg-card"
+                          : "border-border bg-muted"
                     }`}
                   >
-                    <span className="text-xs font-mono font-semibold">
-                      {dealer.short}
-                    </span>
+                    {isActive ? (
+                      <Loader className="h-4 w-4 animate-spin text-primary" />
+                    ) : (
+                      <span className="text-xs font-mono font-semibold">
+                        {dealer.short}
+                      </span>
+                    )}
                   </div>
-                  {isComplete ? (
-                    <CheckCircle className="h-4 w-4 text-success" />
-                  ) : isActive ? (
-                    <Loader className="h-4 w-4 animate-spin text-primary" />
-                  ) : (
-                    <div className="h-4 w-4 rounded-full bg-muted" />
+                  <div className="text-center">
+                    <p className="text-[10px] font-mono font-semibold truncate w-full">
+                      {dealer.short}
+                    </p>
+                    <p className="text-[9px] text-muted-foreground mt-0.5">
+                      {isComplete ? "Done" : isActive ? "Thinking..." : "Waiting"}
+                    </p>
+                  </div>
+                  {isComplete && (
+                    <CheckCircle className="h-3 w-3 text-success" />
                   )}
                 </motion.div>
               );

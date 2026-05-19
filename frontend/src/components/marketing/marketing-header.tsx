@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Sun, Moon, ArrowRight } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
@@ -19,11 +20,13 @@ export function MarketingHeader() {
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <Link href="/" className="flex items-center gap-2 cursor-pointer">
-          <div className="flex h-8 w-8 items-center justify-center rounded bg-primary">
-            <span className="font-mono text-xs font-bold text-primary-foreground">
-              MS
-            </span>
-          </div>
+          <Image
+            src="/logo.png"
+            alt="MarketSounding"
+            width={32}
+            height={32}
+            className="rounded"
+          />
           <span className="font-mono text-base font-semibold tracking-tight">
             MarketSounding
           </span>

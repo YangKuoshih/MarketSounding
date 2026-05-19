@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Filter,
   AlertTriangle,
+  ArrowRight,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { Sparkline } from "@/components/viz/sparkline";
@@ -268,14 +269,29 @@ export default function HistoryPage() {
         {/* List */}
         <div className="rounded-lg border border-border overflow-hidden">
           {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                <Search className="h-5 w-5 text-muted-foreground" />
+            <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+              <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                <Search className="h-6 w-6 text-muted-foreground" />
               </div>
-              <p className="text-sm font-medium">No simulations match</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Try a different search or filter
+              <p className="text-base font-semibold">
+                {searchQuery || topicFilter !== "All Topics" || statusFilter !== "all"
+                  ? "No simulations match your filters"
+                  : "No simulations yet"}
               </p>
+              <p className="mt-2 text-sm text-muted-foreground max-w-xs leading-relaxed">
+                {searchQuery || topicFilter !== "All Topics" || statusFilter !== "all"
+                  ? "Try clearing your search or adjusting the filters."
+                  : "Run your first sounding to start building a history of dealer reactions."}
+              </p>
+              {!searchQuery && topicFilter === "All Topics" && statusFilter === "all" && (
+                <Link
+                  href="/console/sounding/new"
+                  className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  Run your first sounding
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              )}
             </div>
           ) : (
             <table className="w-full text-sm">

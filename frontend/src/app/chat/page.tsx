@@ -4,16 +4,16 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Send,
-  Bot,
   User as UserIcon,
   Sparkles,
-  MessagesSquare,
   Sun,
   Moon,
   ArrowLeft,
   Loader,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useTheme } from "@/components/theme-provider";
 import { api, ApiError, type ChatMessage } from "@/lib/api-client";
 
@@ -117,8 +117,6 @@ export default function AgentChatPage() {
       timestamp: Date.now(),
     };
 
-    // Snapshot the conversation BEFORE adding the new user message,
-    // so we can build the chat history sent to the backend
     const priorMessages = messages;
 
     setMessages((prev) => [...prev, userMsg]);
@@ -128,7 +126,6 @@ export default function AgentChatPage() {
     const apiConfigured = !!process.env.NEXT_PUBLIC_API_URL;
 
     if (!apiConfigured) {
-      // Fallback to mock response when no backend is wired
       setTimeout(() => {
         const agentMsg: Message = {
           id: `a-${Date.now()}`,
@@ -143,13 +140,9 @@ export default function AgentChatPage() {
       return;
     }
 
-    // Real backend call
     try {
-      // Build the message history for the API:
-      // - Include only user/assistant messages (skip the agent intro at index 0)
-      // - Skip the initial intro message (first agent message has no user prompt)
       const apiMessages: ChatMessage[] = priorMessages
-        .slice(1) // skip intro
+        .slice(1)
         .map((m) => ({
           role: m.role === "user" ? "user" : "assistant",
           content: m.content,
@@ -197,17 +190,24 @@ export default function AgentChatPage() {
         <div className="flex h-14 items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <Link
-              href="/"
+              href="/console"
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
-              <span>Home</span>
+              <span>Console</span>
             </Link>
             <div className="h-4 w-px bg-border" />
+            {/* Jarrett branding in header */}
             <div className="flex items-center gap-2">
-              <MessagesSquare className="h-4 w-4 text-primary" />
-              <span className="font-mono text-sm font-semibold">
-                Agent Chat
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary shadow-sm">
+                <Image src="/logo.png" alt="Jarrett" width={18} height={18} className="rounded-full" />
+              </div>
+              <span className="font-mono text-sm font-semibold tracking-tight">
+                Jarrett
+              </span>
+              <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest text-primary">
+                <Zap className="h-2.5 w-2.5" />
+                AI Market Intelligence
               </span>
             </div>
           </div>
@@ -247,14 +247,31 @@ export default function AgentChatPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Agent picker sidebar */}
         <aside className="hidden md:flex w-72 flex-col border-r border-border bg-card">
+          {/* Jarrett sidebar identity */}
           <div className="border-b border-border p-4">
-            <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">
-              Select Dealer
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Each agent maintains a distinct house view.
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary shadow-md ring-2 ring-primary/20">
+                <Image src="/logo.png" alt="Jarrett" width={26} height={26} className="rounded-full" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Jarrett</p>
+                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                  Market Intelligence
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Select a dealer voice. Jarrett channels each firm&apos;s house view
+              to give you direct, perspective-driven market intelligence.
             </p>
           </div>
+
+          <div className="px-3 pt-3 pb-1">
+            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground px-1">
+              Dealer Voices
+            </p>
+          </div>
+
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {dealers.map((dealer) => {
               const isActive = selectedAgent.id === dealer.id;
@@ -263,9 +280,7 @@ export default function AgentChatPage() {
                   key={dealer.id}
                   onClick={() => selectAgent(dealer)}
                   className={`flex w-full items-center gap-3 rounded-md p-3 text-left cursor-pointer transition-colors ${
-                    isActive
-                      ? "bg-muted"
-                      : "hover:bg-muted/50"
+                    isActive ? "bg-muted" : "hover:bg-muted/50"
                   }`}
                 >
                   <div
@@ -301,10 +316,11 @@ export default function AgentChatPage() {
               );
             })}
           </div>
-          <div className="border-t border-border p-4">
+
+          <div className="border-t border-border p-4 space-y-2">
             <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-              <span>5 / 5 Agents Online</span>
+              <span>Jarrett · 5 Dealers Available</span>
             </div>
           </div>
         </aside>
@@ -313,6 +329,13 @@ export default function AgentChatPage() {
         <div className="flex flex-1 flex-col">
           {/* Active agent header */}
           <div className="flex items-center gap-3 border-b border-border bg-card px-6 py-3">
+            {/* Jarrett avatar + active dealer */}
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary ring-2 ring-primary/20 shadow-sm">
+                <Image src="/logo.png" alt="Jarrett" width={20} height={20} className="rounded-full" />
+              </div>
+              <span className="text-xs font-mono text-muted-foreground hidden sm:block">via</span>
+            </div>
             <div
               className="flex h-10 w-10 items-center justify-center rounded-full border-2"
               style={{ borderColor: selectedAgent.color }}
@@ -322,7 +345,11 @@ export default function AgentChatPage() {
               </span>
             </div>
             <div className="flex-1">
-              <h2 className="text-sm font-semibold">{selectedAgent.name}</h2>
+              <h2 className="text-sm font-semibold">
+                Jarrett{" "}
+                <span className="text-muted-foreground font-normal">·</span>{" "}
+                {selectedAgent.name}
+              </h2>
               <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
                 Bias{" "}
                 <span style={{ color: selectedAgent.color }}>
@@ -330,10 +357,10 @@ export default function AgentChatPage() {
                   {selectedAgent.bias.toFixed(2)}
                 </span>{" "}
                 {selectedAgent.bias > 0.2
-                  ? " - Hawkish"
+                  ? " · Hawkish"
                   : selectedAgent.bias < -0.1
-                    ? " - Dovish"
-                    : " - Neutral"}
+                    ? " · Dovish"
+                    : " · Neutral"}
               </p>
             </div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-0.5 text-[10px] font-mono uppercase tracking-widest text-success">
@@ -344,7 +371,7 @@ export default function AgentChatPage() {
 
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
-            {messages.length === 0 ? (
+            {!messages.some((m) => m.role === "user") ? (
               <EmptyChat agent={selectedAgent} onSelect={(p) => send(p)} prompts={suggestedPrompts} />
             ) : (
               <div className="mx-auto max-w-2xl space-y-6">
@@ -358,14 +385,11 @@ export default function AgentChatPage() {
                     transition={{ duration: 0.2 }}
                     className="flex items-center gap-2 text-sm text-muted-foreground"
                   >
-                    <div
-                      className="flex h-7 w-7 items-center justify-center rounded-full border-2 shrink-0"
-                      style={{ borderColor: selectedAgent.color }}
-                    >
-                      <Loader className="h-3 w-3 animate-spin" />
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                      <Loader className="h-3 w-3 animate-spin text-primary" />
                     </div>
                     <span className="font-mono text-xs uppercase tracking-wider">
-                      {selectedAgent.short} is thinking...
+                      Jarrett · {selectedAgent.short} is thinking...
                     </span>
                   </motion.div>
                 )}
@@ -375,15 +399,12 @@ export default function AgentChatPage() {
 
           {/* Input */}
           <div className="border-t border-border bg-card px-6 py-4">
-            <form
-              onSubmit={handleSubmit}
-              className="mx-auto flex max-w-2xl gap-2"
-            >
+            <form onSubmit={handleSubmit} className="mx-auto flex max-w-2xl gap-2">
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={`Ask ${selectedAgent.short} about markets, rates, risks...`}
+                placeholder={`Ask Jarrett via ${selectedAgent.short} about markets, rates, risks...`}
                 disabled={isThinking}
                 className="flex-1 rounded-md border border-input bg-background px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
               />
@@ -397,7 +418,7 @@ export default function AgentChatPage() {
               </button>
             </form>
             <p className="mx-auto mt-2 max-w-2xl text-[10px] text-muted-foreground font-mono">
-              Simulated views -- not actual dealer commentary
+              Jarrett · Simulated views — not actual dealer commentary
             </p>
           </div>
         </div>
@@ -422,30 +443,51 @@ function EmptyChat({
       transition={{ duration: 0.4 }}
       className="mx-auto flex max-w-2xl flex-col items-center justify-center text-center py-12"
     >
-      <div
-        className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2"
-        style={{ borderColor: agent.color }}
-      >
-        <span className="font-mono text-sm font-semibold">{agent.short}</span>
+      {/* Jarrett avatar */}
+      <div className="relative mb-6">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary shadow-lg ring-4 ring-primary/20">
+          <Image src="/logo.png" alt="Jarrett" width={52} height={52} className="rounded-full" />
+        </div>
+        {/* Dealer badge overlaid */}
+        <div
+          className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 bg-card text-[9px] font-mono font-bold"
+          style={{ borderColor: agent.color }}
+        >
+          {agent.short}
+        </div>
       </div>
-      <h2 className="text-xl font-semibold">Talk to {agent.name}</h2>
-      <p className="mt-2 max-w-md text-sm text-muted-foreground leading-relaxed">
+
+      <h2 className="text-2xl font-bold">
+        Jarrett
+      </h2>
+      <p className="mt-1 text-sm font-mono uppercase tracking-widest text-muted-foreground">
+        AI Market Intelligence
+      </p>
+      <p className="mt-4 max-w-md text-sm text-muted-foreground leading-relaxed">
+        Currently channeling{" "}
+        <span className="font-medium text-foreground">{agent.name}</span>.{" "}
         {agent.intro}
       </p>
-      <div className="mt-8 grid w-full grid-cols-1 sm:grid-cols-2 gap-2">
-        {prompts.map((p, i) => (
-          <motion.button
-            key={p}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 + i * 0.05 }}
-            onClick={() => onSelect(p)}
-            className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2.5 text-left text-sm hover:border-primary/40 hover:bg-card/80 transition-colors cursor-pointer"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <span className="text-foreground">{p}</span>
-          </motion.button>
-        ))}
+
+      <div className="mt-8 w-full">
+        <p className="mb-3 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+          Suggested Questions
+        </p>
+        <div className="grid w-full grid-cols-1 sm:grid-cols-2 gap-2">
+          {prompts.map((p, i) => (
+            <motion.button
+              key={p}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 + i * 0.05 }}
+              onClick={() => onSelect(p)}
+              className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2.5 text-left text-sm hover:border-primary/40 hover:bg-muted/50 transition-colors cursor-pointer"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span className="text-foreground">{p}</span>
+            </motion.button>
+          ))}
+        </div>
       </div>
     </motion.div>
   );
@@ -468,23 +510,25 @@ function MessageBubble({
       className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}
     >
       {!isUser && (
-        <div
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2"
-          style={{ borderColor: agent.color }}
-        >
-          <span className="font-mono text-[10px] font-semibold">
-            {agent.short}
-          </span>
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary shadow-sm ring-1 ring-primary/20">
+          <Image src="/logo.png" alt="Jarrett" width={18} height={18} className="rounded-full" />
         </div>
       )}
-      <div
-        className={`max-w-[70%] rounded-lg px-4 py-2.5 text-sm leading-relaxed ${
-          isUser
-            ? "bg-primary text-primary-foreground"
-            : "bg-card border border-border"
-        }`}
-      >
-        <p className="whitespace-pre-wrap">{message.content}</p>
+      <div className="flex flex-col gap-1 max-w-[70%]">
+        {!isUser && (
+          <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground pl-1">
+            Jarrett · {agent.short}
+          </span>
+        )}
+        <div
+          className={`rounded-lg px-4 py-2.5 text-sm leading-relaxed ${
+            isUser
+              ? "bg-primary text-primary-foreground"
+              : "bg-card border border-border"
+          }`}
+        >
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        </div>
       </div>
       {isUser && (
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">

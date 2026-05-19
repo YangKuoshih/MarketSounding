@@ -112,42 +112,46 @@ export default function ConsoleDashboardPage() {
         transition={{ duration: 0.4, ease: "easeOut" }}
         className="max-w-3xl"
       >
-        <h1 className="text-4xl font-semibold tracking-tight mb-3">
-          What&apos;s happening in the markets?
+        <h1 className="text-5xl font-bold tracking-tight mb-4 leading-tight">
+          What&apos;s moving<br />
+          <span className="text-primary">the markets?</span>
         </h1>
-        <p className="text-base text-muted-foreground mb-8 leading-relaxed">
-          Enter a market topic to research, then watch 5 primary dealer agents
-          react and influence each other across multiple rounds.
+        <p className="text-base text-muted-foreground mb-8 leading-relaxed max-w-xl">
+          Enter a topic and watch 5 primary dealer agents debate, influence each other,
+          and converge — or clash — across multiple rounds.
         </p>
-        <form onSubmit={handleSearch} className="relative">
+        <form onSubmit={handleSearch} className="relative shadow-lg">
           <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             placeholder="e.g. FOMC rate decision, tariffs on China, oil supply shock..."
-            className="w-full rounded-lg border border-input bg-background py-4 pl-12 pr-32 text-base placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring font-sans"
+            className="w-full rounded-xl border-2 border-border bg-card py-5 pl-12 pr-36 text-base placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-0 font-sans transition-colors"
           />
           <button
             type="submit"
             disabled={!topic.trim()}
-            className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 cursor-pointer transition-colors"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-40 cursor-pointer transition-colors"
           >
             Research
             <ArrowRight className="h-4 w-4" />
           </button>
         </form>
+        <p className="mt-3 text-xs text-muted-foreground font-mono">
+          Powered by Claude Opus 4.7 · GS · JPM · MS · Citi · BofA
+        </p>
       </motion.div>
 
       {/* Sample event cards */}
-      <div className="mt-16">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-            Sample Events
-          </h2>
-          <span className="text-xs font-mono text-muted-foreground">
-            03 / 03
-          </span>
+      <div className="mt-14">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
+              Start with a sample
+            </h2>
+            <span className="text-xs font-mono text-muted-foreground/50">03 / 03</span>
+          </div>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {sampleEvents.map((event, i) => {

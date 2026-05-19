@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -19,7 +20,7 @@ import { motion, AnimatePresence } from "motion/react";
 const navItems = [
   { href: "/console", label: "Dashboard", icon: LayoutDashboard },
   { href: "/console/sounding/new", label: "New Sounding", icon: Plus },
-  { href: "/chat", label: "Agent Chat", icon: MessagesSquare },
+  { href: "/chat", label: "Jarrett", icon: MessagesSquare },
   { href: "/console/graph", label: "Knowledge Graph", icon: Network },
   { href: "/console/history", label: "History", icon: Clock },
 ];
@@ -34,11 +35,13 @@ export function ConsoleHeader() {
         {/* Logo + Status */}
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2 cursor-pointer">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-primary">
-              <span className="font-mono text-xs font-bold text-primary-foreground">
-                MS
-              </span>
-            </div>
+            <Image
+              src="/logo.png"
+              alt="MarketSounding"
+              width={28}
+              height={28}
+              className="rounded"
+            />
             <span className="font-mono text-sm font-semibold tracking-tight">
               MarketSounding
             </span>

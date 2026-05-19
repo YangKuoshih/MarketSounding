@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "motion/react";
+import { useRef } from "react";
+import { motion, useScroll, useTransform } from "motion/react";
 import {
   ArrowRight,
   Users,
@@ -96,16 +97,37 @@ const workflow = [
 ];
 
 export default function LandingPage() {
+  const heroRef = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"],
+  });
+
+  // Parallax transforms
+  const bgY = useTransform(scrollYProgress, [0, 1], ["0%", "40%"]);
+  const textY = useTransform(scrollYProgress, [0, 1], ["0%", "20%"]);
+  const cardY = useTransform(scrollYProgress, [0, 1], ["0%", "-15%"]);
+  const opacity = useTransform(scrollYProgress, [0, 0.7], [1, 0]);
+
   return (
     <MarketingShell>
       {/* Hero */}
-      <section className="relative overflow-hidden border-b border-border">
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
+      <section ref={heroRef} className="relative overflow-hidden border-b border-border">
+        {/* Parallax background gradient */}
+        <motion.div
+          style={{ y: bgY }}
+          className="absolute inset-0 -z-10 bg-gradient-to-b from-primary/8 via-primary/3 to-transparent pointer-events-none"
+        />
+        {/* Second gradient layer at different speed for depth */}
+        <motion.div
+          style={{ y: useTransform(scrollYProgress, [0, 1], ["0%", "60%"]) }}
+          className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,hsl(var(--primary)/0.12),transparent)] pointer-events-none"
+        />
 
         <div className="mx-auto max-w-7xl px-6 py-20 lg:py-28">
           <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 lg:gap-16">
-            {/* Left: copy */}
-            <div className="lg:col-span-7">
+            {/* Left: copy — slower parallax */}
+            <motion.div style={{ y: textY, opacity }} className="lg:col-span-7">
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -171,16 +193,20 @@ export default function LandingPage() {
                 <Stat value="3-5" label="Round Depth" />
                 <Stat value="< 90s" label="Per Simulation" />
               </motion.div>
-            </div>
+            </motion.div>
 
-            {/* Right: visual mockup */}
+            {/* Right: card stack — faster upward parallax (floats) */}
             <motion.div
-              initial={{ opacity: 0, x: 24 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
+              style={{ y: cardY, opacity }}
               className="lg:col-span-5"
             >
-              <DealerCardStack />
+              <motion.div
+                initial={{ opacity: 0, x: 24 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+              >
+                <DealerCardStack />
+              </motion.div>
             </motion.div>
           </div>
         </div>
