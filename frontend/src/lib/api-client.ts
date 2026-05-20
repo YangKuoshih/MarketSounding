@@ -169,10 +169,12 @@ export interface CreateSimulationParams {
   eventText?: string;
   eventId?: string;
   title?: string;
+  topic?: string;
   config?: {
     maxRounds: number;
     convergenceThreshold: number;
     enableCrisisInjection: boolean;
+    crisisText?: string;
   };
 }
 
@@ -183,6 +185,8 @@ export interface SimulationSummary {
   currentRound: number;
   totalRounds: number;
   createdAt: string;
+  trajectory?: number[];
+  consensus?: number;
 }
 
 export interface SimulationView {

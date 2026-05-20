@@ -1,9 +1,14 @@
 import { ConsoleShell } from "@/components/console/console-shell";
+import { AuthGuard } from "@/components/auth-guard";
 
 export default function ConsoleLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <ConsoleShell>{children}</ConsoleShell>;
+  return (
+    <AuthGuard>
+      <ConsoleShell>{children}</ConsoleShell>
+    </AuthGuard>
+  );
 }

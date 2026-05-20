@@ -76,7 +76,7 @@ export function MarketingFooter() {
             </h4>
             <ul className="space-y-2 text-sm">
               <li className="text-muted-foreground">AWS Bedrock</li>
-              <li className="text-muted-foreground">Claude Opus 4.7</li>
+              <li className="text-muted-foreground">Claude Sonnet 4.6</li>
               <li className="text-muted-foreground">AgentCore</li>
             </ul>
           </div>

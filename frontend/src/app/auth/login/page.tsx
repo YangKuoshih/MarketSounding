@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { LogIn } from "lucide-react";
@@ -16,6 +16,8 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") || "/console";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,7 +27,7 @@ export default function LoginPage() {
       const result = await api.auth.login(username, password);
       if (result.success && result.token) {
         setToken(result.token);
-        router.push("/");
+        router.push(next);
       } else {
         setError(result.error || "Invalid credentials");
       }
@@ -40,10 +42,10 @@ export default function LoginPage() {
     <div className="flex min-h-[calc(100vh-4rem)]">
       {/* Left branding panel */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-card border-r border-border p-12">
-        <div className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3 cursor-pointer">
           <Image src="/logo.png" alt="MarketSounding" width={36} height={36} className="rounded" />
           <span className="font-mono text-base font-semibold tracking-tight">MarketSounding</span>
-        </div>
+        </Link>
 
         <div>
           <motion.div

@@ -4,10 +4,10 @@ import { TavilyResult } from './tavily-client';
 import { Event, Source, ResearchResult } from './types';
 
 const bedrockClient = new BedrockRuntimeClient({});
-const OPUS_MODEL_ID = 'anthropic.claude-opus-4-7';
+const SONNET_MODEL_ID = 'us.anthropic.claude-sonnet-4-6';
 
 /**
- * Synthesize top search results into a structured Event brief using Opus 4.7.
+ * Synthesize top search results into a structured Event brief using Sonnet 4.6.
  * Returns the event record and source citations.
  */
 export async function synthesizeEventBrief(
@@ -47,7 +47,7 @@ Respond with ONLY the JSON object. No explanation or markdown formatting.`;
   });
 
   const command = new InvokeModelCommand({
-    modelId: OPUS_MODEL_ID,
+    modelId: SONNET_MODEL_ID,
     contentType: 'application/json',
     accept: 'application/json',
     body: Buffer.from(body),

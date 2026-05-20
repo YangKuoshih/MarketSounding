@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Fira_Code, Fira_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { JarrettWidget } from "@/components/jarrett-widget";
 
 const firaSans = Fira_Sans({
   variable: "--font-fira-sans",
@@ -33,7 +34,10 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          <JarrettWidget />
+        </ThemeProvider>
       </body>
     </html>
   );

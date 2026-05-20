@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
-import { ZoomIn, ZoomOut, RotateCcw, Loader, AlertTriangle, Network, ArrowRight } from "lucide-react";
+import {
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Loader,
+  AlertTriangle,
+  Network,
+  ArrowRight,
+} from "lucide-react";
 import {
   KnowledgeGraph,
   type GraphNode,
@@ -12,7 +20,6 @@ import {
 import { api, ApiError } from "@/lib/api-client";
 
 const sampleNodes: GraphNode[] = [
-  // Dealers
   {
     id: "dealer:gs",
     type: "dealer",
@@ -63,8 +70,6 @@ const sampleNodes: GraphNode[] = [
       topConcerns: ["Consumer", "Labor Supply"],
     },
   },
-
-  // Topics
   {
     id: "topic:fomc-jun",
     type: "topic",
@@ -95,62 +100,39 @@ const sampleNodes: GraphNode[] = [
       consensusScore: 0.78,
     },
   },
-
-  // Concerns
   {
     id: "concern:inflation",
     type: "concern",
     label: "Inflation",
-    metadata: {
-      frequency: 24,
-      category: "macro",
-      dealerIds: ["gs", "ms", "bofa"],
-    },
+    metadata: { frequency: 24, category: "macro", dealerIds: ["gs", "ms", "bofa"] },
   },
   {
     id: "concern:wages",
     type: "concern",
     label: "Wages",
-    metadata: {
-      frequency: 18,
-      category: "macro",
-      dealerIds: ["gs", "jpm"],
-    },
+    metadata: { frequency: 18, category: "macro", dealerIds: ["gs", "jpm"] },
   },
   {
     id: "concern:fci",
     type: "concern",
     label: "FCI",
-    metadata: {
-      frequency: 15,
-      category: "market",
-      dealerIds: ["ms", "citi"],
-    },
+    metadata: { frequency: 15, category: "market", dealerIds: ["ms", "citi"] },
   },
   {
     id: "concern:supply-chain",
     type: "concern",
     label: "Supply Chain",
-    metadata: {
-      frequency: 9,
-      category: "geopolitical",
-      dealerIds: ["ms", "bofa"],
-    },
+    metadata: { frequency: 9, category: "geopolitical", dealerIds: ["ms", "bofa"] },
   },
-
-  // Crisis
   {
     id: "crisis:china-stim",
     type: "crisis",
     label: "China Stim",
-    metadata: {
-      crisisText: "China announces surprise 200bp rate cut and $2T stimulus",
-    },
+    metadata: { crisisText: "China announces surprise 200bp rate cut and $2T stimulus" },
   },
 ];
 
 const sampleEdges: GraphEdge[] = [
-  // Topic -> Dealer (participation)
   { source: "topic:fomc-jun", target: "dealer:gs", edgeType: "topic", weight: 0.5 },
   { source: "topic:fomc-jun", target: "dealer:jpm", edgeType: "topic", weight: 0.5 },
   { source: "topic:fomc-jun", target: "dealer:ms", edgeType: "topic", weight: 0.5 },
@@ -160,13 +142,9 @@ const sampleEdges: GraphEdge[] = [
   { source: "topic:tariffs", target: "dealer:bofa", edgeType: "topic", weight: 0.5 },
   { source: "topic:oil", target: "dealer:gs", edgeType: "topic", weight: 0.5 },
   { source: "topic:oil", target: "dealer:ms", edgeType: "topic", weight: 0.5 },
-
-  // Dealer -> Dealer (influence)
   { source: "dealer:gs", target: "dealer:jpm", edgeType: "influence", weight: 0.7 },
   { source: "dealer:ms", target: "dealer:bofa", edgeType: "influence", weight: 0.5 },
   { source: "dealer:gs", target: "dealer:citi", edgeType: "influence", weight: 0.6 },
-
-  // Dealer -> Concern
   { source: "dealer:gs", target: "concern:inflation", edgeType: "concern", weight: 0.6 },
   { source: "dealer:gs", target: "concern:wages", edgeType: "concern", weight: 0.5 },
   { source: "dealer:jpm", target: "concern:wages", edgeType: "concern", weight: 0.7 },
@@ -176,18 +154,11 @@ const sampleEdges: GraphEdge[] = [
   { source: "dealer:bofa", target: "concern:inflation", edgeType: "concern", weight: 0.5 },
   { source: "dealer:bofa", target: "concern:supply-chain", edgeType: "concern", weight: 0.6 },
   { source: "dealer:ms", target: "concern:supply-chain", edgeType: "concern", weight: 0.5 },
-
-  // Topic -> Topic (correlation)
   { source: "topic:fomc-jun", target: "topic:tariffs", edgeType: "correlation", weight: 0.4 },
   { source: "topic:tariffs", target: "topic:oil", edgeType: "correlation", weight: 0.3 },
-
-  // Crisis -> Topic
   { source: "crisis:china-stim", target: "topic:fomc-jun", edgeType: "crisis", weight: 1 },
 ];
 
-/**
- * Map a server-side graph node to the client-side GraphNode shape used by the D3 viz.
- */
 function adaptApiNode(n: {
   nodeId: string;
   nodeType: string;
@@ -218,34 +189,25 @@ function adaptApiEdge(e: {
 
 export default function KnowledgeGraphPage() {
   const apiConfigured = !!process.env.NEXT_PUBLIC_API_URL;
-  const [nodes, setNodes] = useState<GraphNode[]>(
-    apiConfigured ? [] : sampleNodes,
-  );
-  const [edges, setEdges] = useState<GraphEdge[]>(
-    apiConfigured ? [] : sampleEdges,
-  );
+  const [nodes, setNodes] = useState<GraphNode[]>(apiConfigured ? [] : sampleNodes);
+  const [edges, setEdges] = useState<GraphEdge[]>(apiConfigured ? [] : sampleEdges);
   const [loading, setLoading] = useState(apiConfigured);
   const [error, setError] = useState<string | null>(null);
   const [usingFallback, setUsingFallback] = useState(false);
 
   useEffect(() => {
     if (!apiConfigured) return;
-
     let cancelled = false;
     (async () => {
       try {
         const result = await api.graph.subgraph();
         if (cancelled) return;
-
         const apiNodes = (result.nodes || []).map(
-          (n) => adaptApiNode(n as Parameters<typeof adaptApiNode>[0]),
+          (n) => adaptApiNode(n as Parameters<typeof adaptApiNode>[0])
         );
         const apiEdges = (result.edges || []).map(
-          (e) => adaptApiEdge(e as Parameters<typeof adaptApiEdge>[0]),
+          (e) => adaptApiEdge(e as Parameters<typeof adaptApiEdge>[0])
         );
-
-        // If the API returned an empty graph, fall back to sample data
-        // so the page still demonstrates capability.
         if (apiNodes.length === 0) {
           setNodes(sampleNodes);
           setEdges(sampleEdges);
@@ -270,10 +232,7 @@ export default function KnowledgeGraphPage() {
         if (!cancelled) setLoading(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [apiConfigured]);
 
   return (
@@ -288,29 +247,25 @@ export default function KnowledgeGraphPage() {
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {loading ? (
-            <>
-              <Loader className="h-3 w-3 animate-spin text-muted-foreground" />
-              <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                Loading
-              </span>
-            </>
-          ) : error ? (
-            <>
-              <AlertTriangle className="h-3 w-3 text-warning" />
-              <span className="text-[10px] font-mono uppercase tracking-widest text-warning">
-                Fallback
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                Live
-              </span>
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-            </>
-          )}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            {loading ? (
+              <>
+                <Loader className="h-3 w-3 animate-spin text-muted-foreground" />
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Loading</span>
+              </>
+            ) : error ? (
+              <>
+                <AlertTriangle className="h-3 w-3 text-warning" />
+                <span className="text-[10px] font-mono uppercase tracking-widest text-warning">Fallback</span>
+              </>
+            ) : (
+              <>
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Live</span>
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -375,7 +330,7 @@ export default function KnowledgeGraphPage() {
         </div>
       </motion.div>
 
-      <div className="border-t border-border bg-card px-6 py-3">
+      <div className="border-t border-border bg-card px-6 py-3 shrink-0">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
             Legend
@@ -408,32 +363,17 @@ function LegendNode({
   return (
     <div className="flex items-center gap-2">
       {shape === "circle" && (
-        <div
-          className="h-3 w-3 rounded-full border-2"
-          style={{ borderColor: color, background: "var(--card)" }}
-        />
+        <div className="h-3 w-3 rounded-full border-2" style={{ borderColor: color, background: "var(--card)" }} />
       )}
       {shape === "rect" && (
-        <div
-          className="h-3 w-4 rounded-sm border"
-          style={{ borderColor: color, background: "var(--card)" }}
-        />
+        <div className="h-3 w-4 rounded-sm border" style={{ borderColor: color, background: "var(--card)" }} />
       )}
       {shape === "diamond" && (
-        <div
-          className="h-3 w-3 rotate-45 border"
-          style={{ borderColor: color, background: "var(--card)" }}
-        />
+        <div className="h-3 w-3 rotate-45 border" style={{ borderColor: color, background: "var(--card)" }} />
       )}
       {shape === "triangle" && (
         <svg width="12" height="12" viewBox="0 0 12 12">
-          <polygon
-            points="6,1 11,10 1,10"
-            fill={color}
-            fillOpacity="0.2"
-            stroke={color}
-            strokeWidth="1"
-          />
+          <polygon points="6,1 11,10 1,10" fill={color} fillOpacity="0.2" stroke={color} strokeWidth="1" />
         </svg>
       )}
       <span className="text-xs text-muted-foreground">{label}</span>
@@ -441,27 +381,11 @@ function LegendNode({
   );
 }
 
-function LegendEdge({
-  color,
-  label,
-  dashed,
-}: {
-  color: string;
-  label: string;
-  dashed: boolean;
-}) {
+function LegendEdge({ color, label, dashed }: { color: string; label: string; dashed: boolean }) {
   return (
     <div className="flex items-center gap-2">
       <svg width="20" height="2" viewBox="0 0 20 2">
-        <line
-          x1="0"
-          y1="1"
-          x2="20"
-          y2="1"
-          stroke={color}
-          strokeWidth="1.5"
-          strokeDasharray={dashed ? "3,2" : "0"}
-        />
+        <line x1="0" y1="1" x2="20" y2="1" stroke={color} strokeWidth="1.5" strokeDasharray={dashed ? "3,2" : "0"} />
       </svg>
       <span className="text-xs text-muted-foreground">{label}</span>
     </div>

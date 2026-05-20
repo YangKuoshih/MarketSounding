@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { CheckCircle, Loader, Zap, FileText, Activity } from "lucide-react";
 import { HDSpectrum } from "@/components/viz/hd-spectrum";
 import { PositionEvolution } from "@/components/viz/position-evolution";
 import { DealerTable } from "@/components/viz/dealer-table";
 import { api, ApiError } from "@/lib/api-client";
-import type { ReactionData, SimulationView } from "@/lib/api-client";
+import type { ReactionData, SimulationView, RoundData } from "@/lib/api-client";
 
 const DEALERS = [
   { id: "gs", name: "Goldman Sachs", short: "GS" },
@@ -104,12 +104,11 @@ const SAMPLE_TRAJECTORIES = [
   { personaId: "bofa", shortName: "BofA", scores: [{ round: 1, score: 0.25 }, { round: 2, score: 0.28 }, { round: 3, score: 0.3 }] },
 ];
 
-export function SimulationViewClient({ id }: { id: string }) {
+export function SimulationViewClient({ id, autoPrint = false }: { id: string; autoPrint?: boolean }) {
   const [showTranscript, setShowTranscript] = useState(false);
   const isDemo = id === "demo";
   const isRunningDemo = id === "running";
-  const apiConfigured = !!process.env.NEXT_PUBLIC_API_URL;
-  const useRealApi = apiConfigured && !isDemo && !isRunningDemo;
+  const useRealApi = !isDemo && !isRunningDemo;
 
   const [liveSim, setLiveSim] = useState<SimulationView | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
@@ -151,6 +150,14 @@ export function SimulationViewClient({ id }: { id: string }) {
       if (timer) clearTimeout(timer);
     };
   }, [id, useRealApi]);
+
+  // Auto-print when simulation is complete and ?print=1 was set
+  useEffect(() => {
+    if (autoPrint && liveSim?.status === "complete") {
+      const t = setTimeout(() => window.print(), 800);
+      return () => clearTimeout(t);
+    }
+  }, [autoPrint, liveSim?.status]);
 
   // Real API: show live state
   if (useRealApi) {
@@ -307,6 +314,16 @@ function formatTimestamp(d: Date): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+function hdColor(score: number): string {
+  if (score > 0.15) return "text-orange-400";
+  if (score < -0.15) return "text-blue-400";
+  return "text-muted-foreground";
+}
+
+function hdLabel(score: number): string {
+  return (score >= 0 ? "+" : "") + score.toFixed(2);
+}
+
 function RunningView({
   id,
   liveSim,
@@ -314,16 +331,18 @@ function RunningView({
   id: string;
   liveSim?: SimulationView | null;
 }) {
-  const [completedDealers, setCompletedDealers] = useState(0);
-  const [currentRound, setCurrentRound] = useState(1);
   // Start with empty logs to avoid SSR/CSR timestamp mismatch; populate in useEffect
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [crisisText, setCrisisText] = useState("");
+  const logsEndRef = useRef<HTMLDivElement>(null);
 
-  // If liveSim is provided, mirror its state; otherwise use simulated polling
+  // Demo-mode animation state (only used when no liveSim)
+  const [demoRound, setDemoRound] = useState(1);
+  const [demoCompleted, setDemoCompleted] = useState(0);
+
   const isLive = !!liveSim;
+  const totalRounds = liveSim?.totalRounds ?? 3;
 
-  // Seed initial logs on mount (client-side only) to avoid hydration mismatch
+  // Seed initial logs on mount (client-side only)
   useEffect(() => {
     setLogs([
       { message: "Initializing simulation...", timestamp: formatTimestamp(new Date()) },
@@ -332,38 +351,55 @@ function RunningView({
     ]);
   }, []);
 
+  // Append log entries when new rounds complete (live mode)
+  const prevRoundCount = useRef(0);
   useEffect(() => {
     if (!isLive || !liveSim) return;
-    const completedReactions = liveSim.rounds.length > 0
-      ? liveSim.rounds[liveSim.rounds.length - 1].reactions.filter(
-          (r) => r.status === "complete",
-        ).length
-      : 0;
-    setCompletedDealers(completedReactions);
-    setCurrentRound(Math.max(1, liveSim.currentRound));
-  }, [isLive, liveSim]);
-
-  // Simulate polling progress (demo mode only)
-  useEffect(() => {
-    if (isLive) return;
-    const totalRounds = 3;
-    const tickMs = 1500;
-    const interval = setInterval(() => {
-      setCompletedDealers((prev) => {
-        if (prev >= 5) {
-          // Round complete, advance
-          if (currentRound < totalRounds) {
-            setCurrentRound((r) => r + 1);
+    const newRounds = liveSim.rounds.length;
+    if (newRounds > prevRoundCount.current) {
+      for (let i = prevRoundCount.current; i < newRounds; i++) {
+        const round = liveSim.rounds[i];
+        const ts = formatTimestamp(new Date());
+        round.reactions.forEach((r) => {
+          setLogs((l) => [
+            ...l,
+            {
+              message: `Round ${round.roundNumber} [${round.roundType}]: ${r.personaId.toUpperCase()} — H/D ${hdLabel(r.hawkishDovishScore)} (conf: ${(r.confidence * 100).toFixed(0)}%)`,
+              timestamp: ts,
+            },
+          ]);
+        });
+        if (i < newRounds - 1 || liveSim.status === "running") {
+          const nextRound = round.roundNumber + 1;
+          if (nextRound <= totalRounds) {
             setLogs((l) => [
               ...l,
-              {
-                message: `Round ${currentRound} complete (convergence: 0.${Math.floor(Math.random() * 30 + 10)})`,
-                timestamp: formatTimestamp(new Date()),
-              },
-              {
-                message: `Round ${currentRound + 1} dispatched to 5 dealers`,
-                timestamp: formatTimestamp(new Date()),
-              },
+              { message: `Round ${nextRound} dispatched to 5 dealers`, timestamp: ts },
+            ]);
+          }
+        }
+      }
+      prevRoundCount.current = newRounds;
+    }
+  }, [isLive, liveSim, totalRounds]);
+
+  // Auto-scroll logs
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
+
+  // Demo animation (no liveSim)
+  useEffect(() => {
+    if (isLive) return;
+    const interval = setInterval(() => {
+      setDemoCompleted((prev) => {
+        if (prev >= 5) {
+          if (demoRound < totalRounds) {
+            setDemoRound((r) => r + 1);
+            setLogs((l) => [
+              ...l,
+              { message: `Round ${demoRound} complete`, timestamp: formatTimestamp(new Date()) },
+              { message: `Round ${demoRound + 1} dispatched to 5 dealers`, timestamp: formatTimestamp(new Date()) },
             ]);
             return 0;
           }
@@ -373,20 +409,38 @@ function RunningView({
         setLogs((l) => [
           ...l,
           {
-            message: `Round ${currentRound}: ${dealer.short} reaction received (HD: ${(Math.random() * 1.6 - 0.8).toFixed(2)})`,
+            message: `Round ${demoRound}: ${dealer.short} reaction received (H/D: ${(Math.random() * 1.6 - 0.8).toFixed(2)})`,
             timestamp: formatTimestamp(new Date()),
           },
         ]);
         return prev + 1;
       });
-    }, tickMs);
-
+    }, 1500);
     return () => clearInterval(interval);
-  }, [currentRound, isLive]);
+  }, [demoRound, isLive, totalRounds]);
 
-  const totalRounds = 3;
-  const progress =
-    ((currentRound - 1 + completedDealers / 5) / totalRounds) * 100;
+  // Derive current round and dealer states from liveSim
+  const currentRound = isLive ? Math.max(1, liveSim!.currentRound) : demoRound;
+
+  // In live mode: all 5 dealers run in parallel per round, so a round is either
+  // complete (in liveSim.rounds) or currently running (all dealers are "thinking")
+  const completedRoundCount = liveSim?.rounds.length ?? 0;
+  const currentRoundData = isLive && liveSim
+    ? liveSim.rounds.find((r) => r.roundNumber === currentRound) ?? null
+    : null;
+  // In live mode all 5 run in parallel — show all as "thinking" until round data arrives
+  // In demo mode use sequential demoCompleted counter
+
+  const progress = isLive
+    ? (completedRoundCount / totalRounds) * 100
+    : ((demoRound - 1 + demoCompleted / 5) / totalRounds) * 100;
+
+  // Latest completed round reactions for live preview
+  const latestCompletedRound = isLive && liveSim && liveSim.rounds.length > 0
+    ? liveSim.rounds[liveSim.rounds.length - 1]
+    : null;
+
+  const title = liveSim?.event?.title || id;
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -401,9 +455,7 @@ function RunningView({
             <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">
               Live Simulation
             </p>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              FOMC June 2026 Decision
-            </h1>
+            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
             <p className="text-xs font-mono text-muted-foreground mt-1">{id}</p>
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-mono uppercase tracking-widest text-primary">
@@ -412,12 +464,10 @@ function RunningView({
           </span>
         </div>
 
-        {/* Progress section */}
-        <div className="mb-8 rounded-lg border border-border bg-card p-5">
+        {/* Progress */}
+        <div className="mb-6 rounded-lg border border-border bg-card p-5">
           <div className="flex items-center justify-between text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">
-            <span>
-              Round {currentRound} / {totalRounds}
-            </span>
+            <span>Round {currentRound} / {totalRounds}</span>
             <span>{progress.toFixed(0)}%</span>
           </div>
           <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
@@ -428,98 +478,113 @@ function RunningView({
             />
           </div>
 
-          {/* Dealer indicators */}
+          {/* Dealer status cards */}
           <div className="mt-6 grid grid-cols-5 gap-3">
-            {DEALERS.map((dealer, i) => {
-              const isComplete = i < completedDealers;
-              const isActive = i === completedDealers;
+            {DEALERS.map((dealer) => {
+              // In live mode all dealers run in parallel — check if this dealer has
+              // a reaction in the current round's data
+              const currentReaction = currentRoundData?.reactions.find(
+                (r) => r.personaId === dealer.id
+              );
+              const isDone = !!currentReaction && currentReaction.status === "complete";
+              // In demo mode use sequential index
+              const demoIdx = DEALERS.indexOf(dealer);
+              const demoIsDone = !isLive && demoIdx < demoCompleted;
+              const demoIsActive = !isLive && demoIdx === demoCompleted;
+
+              const showDone = isLive ? isDone : demoIsDone;
+              const showActive = isLive ? !isDone : demoIsActive;
+              const hdScore = currentReaction?.hawkishDovishScore;
+
               return (
                 <motion.div
                   key={dealer.id}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: isComplete ? [1, 1.1, 1] : 1 }}
-                  transition={{ duration: isComplete ? 0.4 : 0.3, delay: i * 0.05 }}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.3 }}
                   className={`flex flex-col items-center gap-2 rounded-lg border p-3 transition-colors ${
-                    isComplete
+                    showDone
                       ? "border-success/40 bg-success/5"
-                      : isActive
+                      : showActive
                         ? "border-primary/60 bg-primary/5"
                         : "border-border bg-card"
                   }`}
                 >
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
-                      isComplete
-                        ? "border-success bg-success/10"
-                        : isActive
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-muted"
-                    }`}
-                  >
-                    {isActive ? (
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
+                    showDone
+                      ? "border-success bg-success/10"
+                      : showActive
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-muted"
+                  }`}>
+                    {showActive && !showDone ? (
                       <Loader className="h-4 w-4 animate-spin text-primary" />
                     ) : (
-                      <span className="text-xs font-mono font-semibold">
-                        {dealer.short}
-                      </span>
+                      <span className="text-xs font-mono font-semibold">{dealer.short}</span>
                     )}
                   </div>
                   <div className="text-center">
-                    <p className="text-[10px] font-mono font-semibold truncate w-full">
-                      {dealer.short}
-                    </p>
-                    <p className="text-[9px] text-muted-foreground mt-0.5">
-                      {isComplete ? "Done" : isActive ? "Thinking..." : "Waiting"}
-                    </p>
+                    <p className="text-[10px] font-mono font-semibold">{dealer.short}</p>
+                    {showDone && hdScore != null ? (
+                      <p className={`text-[10px] font-mono font-bold mt-0.5 ${hdColor(hdScore)}`}>
+                        {hdLabel(hdScore)}
+                      </p>
+                    ) : (
+                      <p className="text-[9px] text-muted-foreground mt-0.5">
+                        {showDone ? "Done" : showActive ? "Thinking…" : "Waiting"}
+                      </p>
+                    )}
                   </div>
-                  {isComplete && (
-                    <CheckCircle className="h-3 w-3 text-success" />
-                  )}
+                  {showDone && <CheckCircle className="h-3 w-3 text-success" />}
                 </motion.div>
               );
             })}
           </div>
         </div>
 
-        {/* Crisis injection */}
-        <div className="mb-6 rounded-lg border border-border bg-card p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Zap className="h-4 w-4 text-accent" />
-            <h2 className="text-sm font-semibold">Crisis Injection</h2>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              Optional
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <textarea
-              value={crisisText}
-              onChange={(e) => setCrisisText(e.target.value)}
-              placeholder="e.g. China announces surprise 200bp rate cut and $2T stimulus package..."
-              rows={2}
-              className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-            />
-            <button
-              disabled={!crisisText.trim()}
-              className="flex items-center gap-1.5 self-end rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent/90 disabled:opacity-50 cursor-pointer"
-            >
-              <Zap className="h-4 w-4" />
-              Inject
-            </button>
-          </div>
-        </div>
+        {/* Latest completed round preview */}
+        {latestCompletedRound && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="mb-6 rounded-lg border border-border bg-card p-5"
+          >
+            <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">
+              Round {latestCompletedRound.roundNumber} Results —{" "}
+              <span className="capitalize">{latestCompletedRound.roundType.replace("_", " ")}</span>
+            </h2>
+            <div className="space-y-2">
+              {latestCompletedRound.reactions.map((r) => {
+                const dealer = DEALERS.find((d) => d.id === r.personaId);
+                return (
+                  <div key={r.personaId} className="flex items-start gap-3 text-xs">
+                    <span className="font-mono font-semibold w-10 shrink-0 text-muted-foreground">
+                      {dealer?.short ?? r.personaId}
+                    </span>
+                    <span className={`font-mono font-bold w-12 shrink-0 ${hdColor(r.hawkishDovishScore)}`}>
+                      {hdLabel(r.hawkishDovishScore)}
+                    </span>
+                    <span className="text-muted-foreground leading-relaxed line-clamp-2">
+                      {r.ratePathView}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
 
         {/* System dashboard / logs */}
         <div className="rounded-lg border border-border bg-foreground/95 p-4 font-mono text-xs">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Activity className="h-3.5 w-3.5 text-success" />
-              <span className="uppercase tracking-widest text-success">
-                System Dashboard
-              </span>
+              <span className="uppercase tracking-widest text-success">System Dashboard</span>
             </div>
             <span className="text-background/60">{id}</span>
           </div>
-          <div className="space-y-1 max-h-48 overflow-y-auto">
+          <div className="space-y-1 max-h-56 overflow-y-auto">
             {logs.map((log, i) => (
               <motion.div
                 key={i}
@@ -528,15 +593,37 @@ function RunningView({
                 transition={{ duration: 0.2 }}
                 className="flex gap-3 text-background/80"
               >
-                <span className="text-success">{log.timestamp}</span>
+                <span className="text-success shrink-0">{log.timestamp}</span>
                 <span>{log.message}</span>
               </motion.div>
             ))}
+            <div ref={logsEndRef} />
           </div>
         </div>
       </motion.div>
     </div>
   );
+}
+
+function buildTranscript(rounds: RoundData[]): string {
+  return rounds
+    .map((round) => {
+      const header = `## Round ${round.roundNumber}: ${round.roundType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`;
+      const entries = round.reactions.map((r) => {
+        const dealer = DEALERS.find((d) => d.id === r.personaId);
+        const name = dealer?.name ?? r.personaId;
+        const hd = (r.hawkishDovishScore >= 0 ? "+" : "") + r.hawkishDovishScore.toFixed(2);
+        const shift = r.positionShift != null
+          ? ` (shift: ${r.positionShift >= 0 ? "+" : ""}${r.positionShift.toFixed(2)})`
+          : "";
+        const influenced = r.influencedBy?.length
+          ? ` · influenced by ${r.influencedBy.map((id) => id.toUpperCase()).join(", ")}`
+          : "";
+        return `**${name}** H/D: ${hd}${shift}${influenced}\n${r.ratePathView}\n${r.keyQuote ? `"${r.keyQuote}"` : ""}\n\n${r.reasoningMd}`;
+      });
+      return [header, ...entries].join("\n\n");
+    })
+    .join("\n\n---\n\n");
 }
 
 function CompleteView({
@@ -583,17 +670,28 @@ function CompleteView({
               {sim.rounds.length} rounds completed
             </p>
           </div>
-          {isFailed ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive">
-              <Zap className="h-3 w-3" />
-              Failed
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
-              <CheckCircle className="h-3 w-3" />
-              Complete
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {!isFailed && (
+              <button
+                onClick={() => window.print()}
+                className="print:hidden flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors cursor-pointer"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Export Report
+              </button>
+            )}
+            {isFailed ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium text-destructive">
+                <Zap className="h-3 w-3" />
+                Failed
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
+                <CheckCircle className="h-3 w-3" />
+                Complete
+              </span>
+            )}
+          </div>
         </div>
 
         <section className="mb-8">
@@ -629,7 +727,7 @@ function CompleteView({
           <DealerTable reactions={reactions} />
         </section>
 
-        {sim.transcript && (
+        {(sim.transcript || sim.rounds.length > 0) && (
           <section>
             <button
               onClick={() => setShowTranscript(!showTranscript)}
@@ -645,7 +743,7 @@ function CompleteView({
                 transition={{ duration: 0.25 }}
                 className="mt-4 rounded-lg border border-border p-4 text-sm leading-relaxed font-mono text-muted-foreground whitespace-pre-wrap"
               >
-                {sim.transcript}
+                {sim.transcript || buildTranscript(sim.rounds)}
               </motion.div>
             )}
           </section>

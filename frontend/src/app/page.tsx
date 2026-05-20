@@ -137,7 +137,7 @@ export default function LandingPage() {
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
                 <span>System Ready</span>
                 <span className="text-border">|</span>
-                <span>Powered by Claude Opus 4.7</span>
+                <span>Powered by Claude Sonnet 4.6</span>
               </motion.div>
 
               <motion.h1

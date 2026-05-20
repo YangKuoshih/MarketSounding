@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
   Plus,
@@ -13,9 +14,12 @@ import {
   Moon,
   User,
   ChevronDown,
+  LogOut,
+  Settings,
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { motion, AnimatePresence } from "motion/react";
+import { clearToken } from "@/lib/api-client";
 
 const navItems = [
   { href: "/console", label: "Dashboard", icon: LayoutDashboard },
@@ -27,7 +31,40 @@ const navItems = [
 
 export function ConsoleHeader() {
   const pathname = usePathname();
+  const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("ms-token");
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        setUsername(payload.username ?? null);
+      } catch {
+        // malformed token — ignore
+      }
+    }
+  }, []);
+
+  // Close menu on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    if (menuOpen) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpen]);
+
+  function handleSignOut() {
+    clearToken();
+    router.push("/auth/login");
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-md">
@@ -110,15 +147,98 @@ export function ConsoleHeader() {
             </AnimatePresence>
           </button>
 
-          <button
-            className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1.5 hover:bg-muted cursor-pointer transition-colors"
-            aria-label="User menu"
-          >
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted">
-              <User className="h-3 w-3 text-muted-foreground" />
-            </div>
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-          </button>
+          {/* User menu */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen((o) => !o)}
+              className={`flex items-center gap-1.5 rounded-md border px-2 py-1.5 cursor-pointer transition-colors ${
+                menuOpen
+                  ? "border-primary/40 bg-primary/10"
+                  : "border-border hover:bg-muted"
+              }`}
+              aria-label="User menu"
+            >
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20">
+                <User className="h-3 w-3 text-primary" />
+              </div>
+              {username && (
+                <span className="hidden sm:block text-xs font-medium max-w-[80px] truncate">
+                  {username}
+                </span>
+              )}
+              <ChevronDown
+                className={`h-3 w-3 text-muted-foreground transition-transform ${menuOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+
+            <AnimatePresence>
+              {menuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-full mt-2 w-52 rounded-lg border border-border bg-card shadow-lg overflow-hidden z-50"
+                >
+                  {/* Account info */}
+                  <div className="px-4 py-3 border-b border-border">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 shrink-0">
+                        <User className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate">
+                          {username ?? "Analyst"}
+                        </p>
+                        <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                          Console Access
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Menu items */}
+                  <div className="py-1">
+                    <Link
+                      href="/console"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                    >
+                      <LayoutDashboard className="h-3.5 w-3.5" />
+                      Dashboard
+                    </Link>
+                    <Link
+                      href="/console/history"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                    >
+                      <Clock className="h-3.5 w-3.5" />
+                      My Simulations
+                    </Link>
+                    <button
+                      onClick={() => { setMenuOpen(false); }}
+                      className="flex w-full items-center gap-2.5 px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                      Settings
+                      <span className="ml-auto text-[10px] font-mono text-muted-foreground/50">soon</span>
+                    </button>
+                  </div>
+
+                  {/* Sign out */}
+                  <div className="border-t border-border py-1">
+                    <button
+                      onClick={handleSignOut}
+                      className="flex w-full items-center gap-2.5 px-4 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      Sign out
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
     </header>

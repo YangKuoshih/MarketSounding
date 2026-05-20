@@ -13,7 +13,7 @@ export function Sparkline({ values, width = 80, height = 24 }: SparklineProps) {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
-    if (!svgRef.current || values.length === 0) return;
+    if (!svgRef.current || values.length < 2) return;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove();

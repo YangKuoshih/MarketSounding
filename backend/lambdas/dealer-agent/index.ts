@@ -17,7 +17,7 @@ import { buildDealerPrompt, PromptPayload } from './prompt-builder';
 import { DealerAgentInput, DealerAgentOutput } from './types';
 
 const bedrockClient = new BedrockRuntimeClient({});
-const OPUS_MODEL_ID = 'anthropic.claude-opus-4-7';
+const SONNET_MODEL_ID = 'us.anthropic.claude-sonnet-4-6';
 
 /**
  * Lambda handler for dealer agent invocations.
@@ -94,7 +94,7 @@ export async function handler(event: DealerAgentInput): Promise<DealerAgentOutpu
 }
 
 /**
- * Invoke Bedrock Claude Opus 4.7 with the constructed prompt.
+ * Invoke Bedrock Claude Sonnet 4.6 with the constructed prompt.
  */
 async function invokeBedrock(promptPayload: PromptPayload): Promise<string> {
   const body = JSON.stringify({
@@ -108,7 +108,7 @@ async function invokeBedrock(promptPayload: PromptPayload): Promise<string> {
   });
 
   const command = new InvokeModelCommand({
-    modelId: OPUS_MODEL_ID,
+    modelId: SONNET_MODEL_ID,
     contentType: 'application/json',
     accept: 'application/json',
     body: Buffer.from(body),

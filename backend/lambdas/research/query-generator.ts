@@ -1,7 +1,7 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 
 const bedrockClient = new BedrockRuntimeClient({});
-const HAIKU_MODEL_ID = 'anthropic.claude-3-5-haiku-20241022';
+const HAIKU_MODEL_ID = process.env.BEDROCK_HAIKU_MODEL_ID || 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
 
 /**
  * Generate 2-3 search query variants from a user topic using Haiku.

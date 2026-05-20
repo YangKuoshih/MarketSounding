@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Send,
@@ -13,9 +14,10 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
 import { useTheme } from "@/components/theme-provider";
+import { JarrettAvatar } from "@/components/jarrett-avatar";
 import { api, ApiError, type ChatMessage } from "@/lib/api-client";
+import { parseChartSpec, ChatChart } from "@/components/chat-chart";
 
 interface Message {
   id: string;
@@ -81,18 +83,38 @@ const suggestedPrompts = [
 ];
 
 export default function AgentChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <AgentChatContent />
+    </Suspense>
+  );
+}
+
+function AgentChatContent() {
+  const searchParams = useSearchParams();
   const [selectedAgent, setSelectedAgent] = useState(dealers[0]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sentFromGraph = useRef(false);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isThinking]);
+
+  // Auto-send question from knowledge graph ?q= param
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q && !sentFromGraph.current) {
+      sentFromGraph.current = true;
+      send(decodeURIComponent(q));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function selectAgent(agent: (typeof dealers)[0]) {
     setSelectedAgent(agent);
@@ -199,8 +221,8 @@ export default function AgentChatPage() {
             <div className="h-4 w-px bg-border" />
             {/* Jarrett branding in header */}
             <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary shadow-sm">
-                <Image src="/logo.png" alt="Jarrett" width={18} height={18} className="rounded-full" />
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 shadow-sm">
+                <JarrettAvatar size={28} />
               </div>
               <span className="font-mono text-sm font-semibold tracking-tight">
                 Jarrett
@@ -250,8 +272,8 @@ export default function AgentChatPage() {
           {/* Jarrett sidebar identity */}
           <div className="border-b border-border p-4">
             <div className="flex items-center gap-3 mb-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary shadow-md ring-2 ring-primary/20">
-                <Image src="/logo.png" alt="Jarrett" width={26} height={26} className="rounded-full" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 shadow-md ring-2 ring-primary/20">
+                <JarrettAvatar size={40} />
               </div>
               <div>
                 <p className="text-sm font-semibold">Jarrett</p>
@@ -332,7 +354,7 @@ export default function AgentChatPage() {
             {/* Jarrett avatar + active dealer */}
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary ring-2 ring-primary/20 shadow-sm">
-                <Image src="/logo.png" alt="Jarrett" width={20} height={20} className="rounded-full" />
+                <JarrettAvatar size={20} />
               </div>
               <span className="text-xs font-mono text-muted-foreground hidden sm:block">via</span>
             </div>
@@ -446,7 +468,7 @@ function EmptyChat({
       {/* Jarrett avatar */}
       <div className="relative mb-6">
         <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary shadow-lg ring-4 ring-primary/20">
-          <Image src="/logo.png" alt="Jarrett" width={52} height={52} className="rounded-full" />
+          <JarrettAvatar size={52} />
         </div>
         {/* Dealer badge overlaid */}
         <div
@@ -511,7 +533,7 @@ function MessageBubble({
     >
       {!isUser && (
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary shadow-sm ring-1 ring-primary/20">
-          <Image src="/logo.png" alt="Jarrett" width={18} height={18} className="rounded-full" />
+          <JarrettAvatar size={18} />
         </div>
       )}
       <div className="flex flex-col gap-1 max-w-[70%]">
@@ -527,7 +549,17 @@ function MessageBubble({
               : "bg-card border border-border"
           }`}
         >
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          {isUser ? (
+            <p className="whitespace-pre-wrap">{message.content}</p>
+          ) : (() => {
+            const { prose, chart } = parseChartSpec(message.content);
+            return (
+              <>
+                <p className="whitespace-pre-wrap">{prose}</p>
+                {chart && <ChatChart spec={chart} />}
+              </>
+            );
+          })()}
         </div>
       </div>
       {isUser && (

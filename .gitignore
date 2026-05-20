@@ -65,6 +65,7 @@ backend/.build/
 # Playwright test artifacts
 # =============================================================================
 .playwright-mcp/
+.screenshots/
 frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/

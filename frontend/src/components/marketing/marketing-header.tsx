@@ -86,16 +86,23 @@ export function MarketingHeader() {
 
           <Link
             href="/auth/login"
-            className="hidden sm:inline-flex text-sm text-muted-foreground hover:text-foreground px-3 py-1.5"
+            className="hidden sm:inline-flex text-sm text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md hover:bg-muted transition-colors cursor-pointer"
           >
             Sign in
+          </Link>
+
+          <Link
+            href="/auth/register"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors cursor-pointer"
+          >
+            Create account
           </Link>
 
           <Link
             href="/console"
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
           >
-            Launch Console
+            Console
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>

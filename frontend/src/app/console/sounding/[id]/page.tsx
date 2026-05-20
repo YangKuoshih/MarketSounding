@@ -7,13 +7,16 @@ export function generateStaticParams() {
   return [{ id: "demo" }, { id: "running" }];
 }
 
-export const dynamicParams = false;
+export const dynamicParams = true;
 
 export default async function SimulationViewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ print?: string }>;
 }) {
   const { id } = await params;
-  return <SimulationViewClient id={id} />;
+  const { print } = await searchParams;
+  return <SimulationViewClient id={id} autoPrint={print === "1"} />;
 }

@@ -140,3 +140,13 @@
     @apply font-sans;
   }
 }
+
+@media print {
+  body { background: white !important; color: black !important; }
+  nav, aside, header, .print\:hidden { display: none !important; }
+  .border-border { border-color: #e5e7eb !important; }
+  .bg-card { background: white !important; }
+  .text-muted-foreground { color: #6b7280 !important; }
+  .text-foreground { color: black !important; }
+  a { text-decoration: none; }
+}

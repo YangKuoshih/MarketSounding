@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -11,36 +11,20 @@ import {
   ArrowRight,
   CheckCircle,
   Loader,
+  AlertCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { Sparkline } from "@/components/viz/sparkline";
+import { api, type SimulationSummary } from "@/lib/api-client";
 
-const recentSoundings = [
-  {
-    id: "sim_a1b2c3d4",
-    title: "FOMC June 2026 Decision",
-    status: "complete" as const,
-    rounds: "3 / 3",
-    trajectory: [0.05, 0.08, 0.1],
-    createdAt: "2 days ago",
-  },
-  {
-    id: "sim_m3n4o5p6",
-    title: "Yen Intervention Speculation",
-    status: "running" as const,
-    rounds: "2 / 4",
-    trajectory: [-0.1, -0.05],
-    createdAt: "1 hour ago",
-  },
-  {
-    id: "sim_e5f6g7h8",
-    title: "US-China Tariff Escalation",
-    status: "complete" as const,
-    rounds: "4 / 4",
-    trajectory: [0.3, 0.35, 0.32, 0.34],
-    createdAt: "4 days ago",
-  },
-];
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 const sampleEvents = [
   {
@@ -78,6 +62,27 @@ const iconMap = {
 export default function ConsoleDashboardPage() {
   const [topic, setTopic] = useState("");
   const router = useRouter();
+  const [recentSoundings, setRecentSoundings] = useState<SimulationSummary[]>([]);
+  const [soundingsLoading, setSoundingsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await api.simulations.list();
+        if (cancelled) return;
+        const arr = Array.isArray(result)
+          ? result
+          : ((result as unknown as { simulations?: SimulationSummary[] }).simulations ?? []);
+        setRecentSoundings(arr.slice(0, 5));
+      } catch {
+        // silently leave list empty — no mock fallback on dashboard
+      } finally {
+        if (!cancelled) setSoundingsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -139,7 +144,7 @@ export default function ConsoleDashboardPage() {
           </button>
         </form>
         <p className="mt-3 text-xs text-muted-foreground font-mono">
-          Powered by Claude Opus 4.7 · GS · JPM · MS · Citi · BofA
+          Powered by Claude Sonnet 4.6 · GS · JPM · MS · Citi · BofA
         </p>
       </motion.div>
 
@@ -168,7 +173,7 @@ export default function ConsoleDashboardPage() {
                 }}
                 onClick={() =>
                   router.push(
-                    `/console/sounding/new?sample=${encodeURIComponent(event.id)}`,
+                    `/console/sounding/new?topic=${encodeURIComponent(event.title)}`,
                   )
                 }
                 className="group relative flex flex-col items-start gap-4 rounded-lg border border-border bg-card p-5 text-left transition-all hover:border-primary/40 hover:shadow-lg cursor-pointer"
@@ -217,39 +222,54 @@ export default function ConsoleDashboardPage() {
           </Link>
         </div>
         <div className="rounded-lg border border-border bg-card overflow-hidden">
-          {recentSoundings.map((sim, i) => (
-            <motion.div
-              key={sim.id}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, delay: 0.3 + i * 0.05 }}
-            >
-              <Link
-                href="/console/sounding/demo"
-                className="flex items-center gap-4 px-5 py-4 border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
+          {soundingsLoading ? (
+            <div className="flex items-center gap-2 px-5 py-6 text-xs text-muted-foreground font-mono">
+              <Loader className="h-3.5 w-3.5 animate-spin" />
+              Loading your simulations…
+            </div>
+          ) : recentSoundings.length === 0 ? (
+            <div className="flex items-center gap-2 px-5 py-6 text-xs text-muted-foreground font-mono">
+              <AlertCircle className="h-3.5 w-3.5" />
+              No simulations yet — run your first sounding above.
+            </div>
+          ) : (
+            recentSoundings.map((sim, i) => (
+              <motion.div
+                key={sim.simulationId}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, delay: 0.3 + i * 0.05 }}
               >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3">
-                    {sim.status === "complete" ? (
-                      <CheckCircle className="h-4 w-4 text-success shrink-0" />
-                    ) : (
-                      <Loader className="h-4 w-4 text-primary shrink-0 animate-spin" />
-                    )}
-                    <p className="text-sm font-medium truncate">{sim.title}</p>
+                <Link
+                  href={`/console/sounding/${sim.simulationId}`}
+                  className="flex items-center gap-4 px-5 py-4 border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3">
+                      {sim.status === "complete" ? (
+                        <CheckCircle className="h-4 w-4 text-success shrink-0" />
+                      ) : sim.status === "failed" ? (
+                        <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
+                      ) : (
+                        <Loader className="h-4 w-4 text-primary shrink-0 animate-spin" />
+                      )}
+                      <p className="text-sm font-medium truncate">
+                        {sim.eventTitle || sim.simulationId}
+                      </p>
+                    </div>
+                    <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground font-mono">
+                      <span className="truncate max-w-[120px]">{sim.simulationId}</span>
+                      <span className="text-border">|</span>
+                      <span>Round {sim.currentRound} / {sim.totalRounds}</span>
+                      <span className="text-border">|</span>
+                      <span>{timeAgo(sim.createdAt)}</span>
+                    </div>
                   </div>
-                  <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground font-mono">
-                    <span>{sim.id}</span>
-                    <span className="text-border">|</span>
-                    <span>Round {sim.rounds}</span>
-                    <span className="text-border">|</span>
-                    <span>{sim.createdAt}</span>
-                  </div>
-                </div>
-                <Sparkline values={sim.trajectory} width={100} height={30} />
-                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </Link>
-            </motion.div>
-          ))}
+                  <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </Link>
+              </motion.div>
+            ))
+          )}
         </div>
       </motion.div>
     </div>

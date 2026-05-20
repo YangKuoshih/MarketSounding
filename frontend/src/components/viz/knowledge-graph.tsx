@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import { motion, AnimatePresence } from "motion/react";
-import { X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { X, MessageSquare } from "lucide-react";
 
 export interface GraphNode extends d3.SimulationNodeDatum {
   id: string;
@@ -38,10 +39,29 @@ const NODE_SIZES: Record<GraphNode["type"], number> = {
   crisis: 16,
 };
 
+function nodeQuestion(node: GraphNode): string {
+  const meta = node.metadata || {};
+  if (node.type === "dealer") {
+    return `What is ${node.label}'s current macro view and typical concerns about rates and the Fed?`;
+  }
+  if (node.type === "topic") {
+    return `How do the dealers typically react to "${node.label}"? Who anchors the consensus?`;
+  }
+  if (node.type === "concern") {
+    const dealers = (meta.dealerIds as string[] | undefined)?.join(", ") || "the dealers";
+    return `Why do ${dealers} cite "${node.label}" as a key concern? How does it affect their H/D positioning?`;
+  }
+  if (node.type === "crisis") {
+    return `How would a crisis event like "${node.label}" change dealer positions and the H/D spectrum?`;
+  }
+  return `Tell me about "${node.label}" in the context of macro markets.`;
+}
+
 export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
@@ -274,6 +294,17 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
             </div>
 
             <NodeDetails node={selectedNode} />
+
+            <button
+              onClick={() => {
+                const q = encodeURIComponent(nodeQuestion(selectedNode));
+                router.push(`/chat?q=${q}`);
+              }}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              Ask Jarrett about this
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

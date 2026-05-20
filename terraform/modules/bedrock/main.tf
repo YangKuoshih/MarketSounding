@@ -23,9 +23,9 @@
 #      - Used by: Dealer Agent Lambda, Research Agent (event synthesis)
 #      - Estimated tokens per simulation: ~50K input + ~10K output per round
 #
-#   2. Claude 3.5 Haiku (anthropic.claude-3-5-haiku-20241022)
-#      - Purpose: Utility tasks (search query generation, summarization)
-#      - Used by: Research Agent (query generation, classification)
+#   2. Claude Haiku 4.5 (us.anthropic.claude-haiku-4-5-20251001-v1:0)
+#      - Purpose: Utility tasks (search query generation, summarization, chat)
+#      - Used by: Research Agent (query generation), Chat Agent
 #      - Estimated tokens per call: ~2K input + ~500 output
 #
 # -----------------------------------------------------------------------------
@@ -33,7 +33,7 @@
 locals {
   # Bedrock model identifiers
   opus_model_id  = "anthropic.claude-opus-4-7"
-  haiku_model_id = "anthropic.claude-3-5-haiku-20241022"
+  haiku_model_id = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
   # Dealer persona IDs matching AgentCore agent definitions
   dealer_persona_ids = ["gs", "jpm", "ms", "citi", "bofa"]
@@ -114,7 +114,7 @@ locals {
 #
 # 3. Configure Lambda environment variables:
 #    - BEDROCK_OPUS_MODEL_ID  = anthropic.claude-opus-4-7
-#    - BEDROCK_HAIKU_MODEL_ID = anthropic.claude-3-5-haiku-20241022
+#    - BEDROCK_HAIKU_MODEL_ID = us.anthropic.claude-haiku-4-5-20251001-v1:0
 #    - AGENTCORE_AGENT_PREFIX = {name_prefix}-dealer-
 #
 # 4. Verify IAM permissions:

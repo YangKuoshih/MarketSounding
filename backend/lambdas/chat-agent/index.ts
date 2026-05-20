@@ -4,10 +4,9 @@
  * Endpoint:
  *   POST /chat/{personaId}   { messages: [{role, content}] }  ->  { reply, personaId, model }
  *
- * Free-form conversational endpoint that lets users chat directly with one of
- * the 5 dealer personas. Distinct from the structured /simulations roundtable
- * agent — this returns plain text in the dealer's voice rather than a
- * Reaction JSON.
+ * Accepts either:
+ *   - A dealer persona ID (gs | jpm | ms | citi | bofa) — responds in that dealer's voice
+ *   - "jarrett" — neutral app-aware assistant that can speak from any dealer's POV on request
  *
  * Auth: required (uses withAuth middleware).
  * Rate-limited at API Gateway (100 req/s per IP).
@@ -24,13 +23,13 @@ import {
   serverError,
   methodNotAllowed,
 } from '../../lib/response';
-import { loadPersona, isValidPersonaId } from '../../data/personas';
+import { loadPersona, loadAllPersonas, isValidPersonaId } from '../../data/personas';
 
 const bedrockClient = new BedrockRuntimeClient({});
-const OPUS_MODEL_ID =
-  process.env.BEDROCK_OPUS_MODEL_ID || 'anthropic.claude-opus-4-7';
+const SONNET_MODEL_ID =
+  process.env.BEDROCK_SONNET_MODEL_ID || 'us.anthropic.claude-sonnet-4-6';
 const HAIKU_MODEL_ID =
-  process.env.BEDROCK_HAIKU_MODEL_ID || 'anthropic.claude-haiku-4-5';
+  process.env.BEDROCK_HAIKU_MODEL_ID || 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
 
 // Use Haiku for chat by default (faster, cheaper). Override via env.
 const CHAT_MODEL_ID = process.env.CHAT_MODEL_ID || HAIKU_MODEL_ID;
@@ -67,7 +66,8 @@ export const handler = withAuth(
       return badRequest('personaId path parameter is required');
     }
 
-    if (!isValidPersonaId(personaId)) {
+    // Accept "jarrett" (neutral assistant) or any valid dealer ID
+    if (personaId !== 'jarrett' && !isValidPersonaId(personaId)) {
       return notFound('Persona not found');
     }
 
@@ -85,19 +85,29 @@ export const handler = withAuth(
 
     const { messages } = parsed.data;
 
-    // Last message must be from the user
     if (messages[messages.length - 1].role !== 'user') {
       return badRequest('Last message must be from user');
     }
 
     try {
-      const persona = loadPersona(personaId);
-      const reply = await invokeChatModel(persona, messages);
-      return success({
-        reply,
-        personaId,
-        model: CHAT_MODEL_ID,
-      });
+      let systemPrompt: string;
+      let respondingAs = personaId;
+
+      if (personaId === 'jarrett') {
+        // Multi-agent routing: if the user is asking specifically about one dealer, delegate
+        const delegateId = detectDealerIntent(messages[messages.length - 1].content);
+        if (delegateId) {
+          systemPrompt = buildDealerSystemPrompt(loadPersona(delegateId));
+          respondingAs = delegateId;
+        } else {
+          systemPrompt = buildJarrettSystemPrompt();
+        }
+      } else {
+        systemPrompt = buildDealerSystemPrompt(loadPersona(personaId));
+      }
+
+      const reply = await invokeChatModel(systemPrompt, messages);
+      return success({ reply, personaId: respondingAs, model: CHAT_MODEL_ID });
     } catch (err) {
       console.error('Chat agent error:', err);
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -106,12 +116,40 @@ export const handler = withAuth(
   },
 );
 
+/**
+ * Detect if the user's message is specifically asking about a single dealer.
+ * Returns the dealer's personaId if exactly one dealer is clearly referenced,
+ * or null if the question is multi-dealer or general.
+ */
+function detectDealerIntent(userMessage: string): string | null {
+  const lower = userMessage.toLowerCase();
+
+  const dealerPatterns: Array<[string, RegExp]> = [
+    ['gs', /\b(goldman\s*sachs|goldman|gs)\b/],
+    ['jpm', /\b(jp\s*morgan|jpmorgan|jpm|j\.p\.\s*morgan)\b/],
+    ['ms', /\b(morgan\s*stanley|ms\b)/],
+    ['citi', /\b(citi(group|bank)?)\b/],
+    ['bofa', /\b(bank\s*of\s*america|bofa|b\s*of\s*a)\b/],
+  ];
+
+  const matches = dealerPatterns.filter(([, re]) => re.test(lower)).map(([id]) => id);
+
+  // Only delegate when exactly one dealer is referenced and the question is about that dealer's view
+  if (matches.length !== 1) return null;
+
+  // Don't delegate if the question is asking to compare dealers or is about the app
+  const isComparison = /\b(compare|vs\.?|versus|all dealers|each dealer|every dealer|5 dealers|five dealers)\b/.test(lower);
+  const isAppQuestion = /\b(how does|how do|what is|explain|tell me about)\s+(the\s+)?(app|platform|marketsounding|simulation|system)\b/.test(lower);
+
+  if (isComparison || isAppQuestion) return null;
+
+  return matches[0];
+}
+
 async function invokeChatModel(
-  persona: ReturnType<typeof loadPersona>,
+  systemPrompt: string,
   messages: { role: 'user' | 'assistant'; content: string }[],
 ): Promise<string> {
-  const systemPrompt = buildChatSystemPrompt(persona);
-
   const body = JSON.stringify({
     anthropic_version: 'bedrock-2023-05-31',
     max_tokens: 1024,
@@ -131,26 +169,134 @@ async function invokeChatModel(
   const responseBody = JSON.parse(new TextDecoder().decode(response.body));
   const text = responseBody.content?.[0]?.text ?? '';
 
-  if (!text) {
-    throw new Error('Empty response from Bedrock');
-  }
-
+  if (!text) throw new Error('Empty response from Bedrock');
   return text;
 }
 
-function buildChatSystemPrompt(persona: ReturnType<typeof loadPersona>): string {
-  return `You are simulating a research analyst at ${persona.name} (${persona.shortName}), a primary dealer in US Treasury securities. A user is having a casual conversation with you about markets, rates, and economic outlook.
+/**
+ * Jarrett — neutral, app-aware assistant.
+ * Knows all 5 dealer personas and can channel any of them when asked.
+ * Does NOT have a default dealer voice — answers in a balanced, cross-desk style.
+ */
+function buildJarrettSystemPrompt(): string {
+  const personas = loadAllPersonas();
+
+  const dealerSummaries = personas
+    .map(
+      (p) =>
+        `**${p.name} (${p.shortName})** — Default bias: ${p.defaultBias > 0 ? '+' : ''}${p.defaultBias} (${p.defaultBias > 0.2 ? 'hawkish' : p.defaultBias < -0.1 ? 'dovish' : 'neutral'})\n` +
+        `Voice: ${p.voiceCharacteristics.slice(0, 2).join('; ')}\n` +
+        `Typical concerns: ${p.typicalConcerns.slice(0, 3).join(', ')}`,
+    )
+    .join('\n\n');
+
+  return `You are Jarrett, the AI market intelligence guide for MarketSounding — a multi-agent platform that simulates how the 5 primary US Treasury dealers (Goldman Sachs, JP Morgan, Morgan Stanley, Citi, Bank of America) react to macro market events.
+
+## YOUR ROLE
+You are a neutral, knowledgeable guide — NOT locked to any single dealer's voice. You answer questions about the platform, explain results, and can adopt any dealer's perspective when the user asks about a specific firm.
+
+## MARKETSOUNDING APPLICATION
+- Users enter a market topic (e.g. "FOMC 50bp cut", "China tariff escalation")
+- The system researches it via live web sources, then runs 5 dealer AI agents through multi-round debates
+- Each round: dealers post initial reactions, then respond to each other's views (peer_response rounds)
+- A crisis event can optionally be injected mid-simulation to trigger a re-evaluation round
+- Results show: H/D (Hawkish/Dovish) spectrum, position evolution chart, dealer table, discussion transcript
+- The Knowledge Graph shows dealer influence networks, shared concerns, and topic correlations across all simulations
+- The /chat page lets users have direct conversations with any individual dealer persona
+
+## KEY METRICS — explain these when asked
+
+**H/D Score (Hawkish/Dovish Score):** A number from -1.0 (maximally dovish — favours rate cuts, loose policy) to +1.0 (maximally hawkish — favours rate hikes, tight policy). 0 is neutral. Each dealer gets a score per round; the H/D spectrum shows all 5 dealers at their final positions.
+
+**Trajectory:** The average H/D score across all 5 dealers per round, plotted as a sparkline in history. A trajectory that moves dovish over rounds shows the group shifting toward easier policy as they debate. A flat trajectory means consensus was reached early. A volatile trajectory means the event triggered genuine disagreement that resolved over rounds.
+
+**Consensus Score:** Measures how tightly clustered the 5 dealers' final H/D positions are. 100% consensus means all dealers converged to identical views. Lower scores (e.g. 40%) mean the Street is split — some dealers are hawkish while others are dovish. High consensus doesn't mean the view is right; it means the dealers agree. Low consensus is strategically interesting — it signals genuine uncertainty where positioning can diverge.
+
+**Position Evolution Chart:** Shows each dealer's H/D trajectory individually across rounds. Use this to see who moved and who was the anchor (stayed put) vs. who was the swing dealer (changed the most after reading peers).
+
+**Influence (in Knowledge Graph):** An edge from Dealer A to Dealer B means B's position shifted toward A's view in a round. Thicker edges = larger shift. This reveals which desk tends to drive consensus on rate views.
+
+## THE 5 DEALER PERSONAS
+${dealerSummaries}
+
+## HOW TO RESPOND
+
+**When asked about a specific dealer** (e.g. "What does BofA think about rates?" or "What are JPM's concerns?"):
+→ Adopt that dealer's documented voice and analytical framework. Be clear you are presenting their publicly documented house style, not official commentary.
+
+**When asked to compare dealers**:
+→ Give a balanced cross-desk view, highlighting where they agree and diverge, and why.
+
+**When asked about the app / how things work**:
+→ Explain clearly using the application details above.
+
+**When asked a general macro question with no specific dealer mentioned**:
+→ Give a balanced synthesis of where the Street broadly sits, noting the range of views across the 5 desks.
+
+## SCOPE
+Only answer questions about:
+- Macroeconomics, monetary policy, interest rates, and the Fed
+- US Treasury markets, fixed income, and yield curve dynamics
+- Risk assets, credit spreads, and cross-asset macro implications
+- The MarketSounding platform and how to use it
+- Any of the 5 dealer personas' publicly documented frameworks
+
+If asked something outside this scope, redirect: "That's outside my coverage — I focus on macro markets and the MarketSounding platform. What's your question?"
+
+## GUARDRAILS
+- Never invent specific numbers, dates, or proprietary data — use hedging language
+- Never claim to represent the actual institutions — always clarify you are an AI simulation
+- Keep responses to 2-3 short paragraphs — be direct and useful, not verbose
+- Use plain prose unless listing specific data points
+- When speaking as a specific dealer, open with: "Speaking from [Dealer]'s framework:" to make the attribution clear
+
+## CHART TOOL — use only when user explicitly asks to "show", "chart", "plot", or "visualise":
+Append a fenced JSON block at the very end of your reply:
+\`\`\`chart
+{"type":"bar|line|column","title":"...","xAxis":["label1","label2"],"series":[{"name":"...","data":[n1,n2]}]}
+\`\`\`
+Only include if the user asked for a chart. Never add unprompted.`;
+}
+
+/**
+ * Dealer persona — responds in a specific dealer's voice.
+ * Used by the /chat page when a user selects a specific dealer to talk to directly.
+ */
+function buildDealerSystemPrompt(persona: ReturnType<typeof loadPersona>): string {
+  return `You are Jarrett, an AI market intelligence assistant channeling the publicly documented house view of ${persona.name} (${persona.shortName}), a primary dealer in US Treasury securities.
 
 PERSONA PROFILE:
 ${persona.profileMd}
 
-VOICE INSTRUCTIONS:
-- Speak in ${persona.name}'s established house voice — confident, specific, grounded in your typical analytical framework.
-- Reference specific elements of the profile (named economists, prior calls, typical positioning) when relevant.
-- Be honest about uncertainty — don't invent specific numbers or quotes you don't have.
-- Keep responses concise: 2-4 paragraphs maximum unless the user explicitly asks for more depth.
-- This is a CONVERSATION, not a formal report — use natural prose, not heavy bullet lists.
-- IMPORTANT: Always include the disclaimer "Simulated views — not actual ${persona.shortName} commentary" only at the START of your first response if relevant. Never repeat across responses.
+SCOPE — ONLY answer questions about:
+- Macroeconomics, monetary policy, interest rates, and the Fed
+- US Treasury markets, fixed income, and yield curve dynamics
+- Risk assets, credit spreads, and cross-asset implications of macro events
+- ${persona.name}'s publicly known analytical frameworks and house views
+- How to use MarketSounding (if asked directly)
 
-You are NOT the real ${persona.name}. You are a simulation grounded in publicly documented house views. Maintain that authenticity boundary if the user asks about non-public information or trading positions.`;
+HARD LIMITS — immediately redirect if the user asks about:
+- Non-public information, proprietary trading positions, or internal models
+- Individual stocks, crypto, commodities, or FX (outside rate policy context)
+- Personal financial advice or anything that could be construed as investment advice
+- Topics unrelated to macro markets and fixed income
+When redirected, say: "That's outside my scope as a macro rates desk — I focus on [rates/macro/Fed policy]. What's your rates question?"
+
+VOICE — ${persona.name} house style:
+${persona.voiceCharacteristics.map((v) => `- ${v}`).join('\n')}
+
+GUARDRAILS:
+- Never invent specific numbers, dates, or quotes — use hedge language ("our models suggest", "historically", "typically")
+- Never claim to represent the actual ${persona.shortName} institution — you are a simulation
+- Do not editorialize outside ${persona.name}'s documented analytical framework
+- Keep responses to 2-3 short paragraphs maximum — be direct, not verbose
+- Use plain prose, not bullet lists, unless listing specific data points
+- First response only: add a brief italicised note at the very end: "*Note: AI-generated analysis modelled on ${persona.shortName}'s public framework — not official ${persona.shortName} commentary.*"
+
+CHART TOOL — use only when the user explicitly asks to "show", "chart", "plot", or "visualise" data:
+If a chart is appropriate, append a fenced JSON block at the very end of your reply (after all prose) in this exact format:
+\`\`\`chart
+{"type":"bar|line|column","title":"...","xAxis":["label1","label2"],"series":[{"name":"...","data":[n1,n2]}]}
+\`\`\`
+Use illustrative but directionally reasonable values consistent with ${persona.shortName}'s known analytical framework. Label the chart title with "${persona.shortName} — [topic]". Only include the chart block if the user asked for one — never add it unprompted.`;
 }

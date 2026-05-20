@@ -41,7 +41,7 @@ export default function RegisterPage() {
       const result = await api.auth.register(username, password);
       if (result.success && result.token) {
         setToken(result.token);
-        router.push("/");
+        router.push("/console");
       } else {
         setError(result.error || "Registration failed");
       }
@@ -56,10 +56,10 @@ export default function RegisterPage() {
     <div className="flex min-h-[calc(100vh-4rem)]">
       {/* Left branding panel */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-card border-r border-border p-12">
-        <div className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3 cursor-pointer">
           <Image src="/logo.png" alt="MarketSounding" width={36} height={36} className="rounded" />
           <span className="font-mono text-base font-semibold tracking-tight">MarketSounding</span>
-        </div>
+        </Link>
 
         <div>
           <motion.div

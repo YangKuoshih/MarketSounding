@@ -1,4 +1,5 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 
 // Stub env vars BEFORE any other imports so Lambda code doesn't throw on missing env vars
 process.env.IS_LOCAL = 'true';
@@ -181,15 +182,39 @@ app.post('/chat/:personaId', async (req: Request, res: Response) => {
 
 // ── Simulations (read) ────────────────────────────────────────────────────────
 
+function computeTrajectory(rounds: RoundData[]): number[] {
+  return rounds.map((round) => {
+    const scores = round.reactions.map((r) => r.hawkishDovishScore);
+    if (scores.length === 0) return 0;
+    return scores.reduce((a, b) => a + b, 0) / scores.length;
+  });
+}
+
+function computeConsensus(rounds: RoundData[]): number {
+  if (rounds.length === 0) return 0;
+  const lastRound = rounds[rounds.length - 1];
+  const scores = lastRound.reactions.map((r) => r.hawkishDovishScore);
+  if (scores.length < 2) return 1;
+  const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
+  const variance = scores.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / scores.length;
+  const stddev = Math.sqrt(variance);
+  // Normalize: stddev of 0 = full consensus, stddev >= 0.8 = max divergence
+  return Math.max(0, Math.min(1, 1 - stddev / 0.8));
+}
+
 app.get('/simulations', (_req: Request, res: Response) => {
-  const list = Array.from(simStore.values()).map((s) => ({
-    simulationId: s.simulationId,
-    eventTitle: s.eventTitle,
-    status: s.status,
-    currentRound: s.currentRound,
-    totalRounds: s.totalRounds,
-    createdAt: s.createdAt,
-  }));
+  const list = Array.from(simStore.values())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .map((s) => ({
+      simulationId: s.simulationId,
+      eventTitle: s.eventTitle,
+      status: s.status,
+      currentRound: s.currentRound,
+      totalRounds: s.totalRounds,
+      createdAt: s.createdAt,
+      trajectory: computeTrajectory(s.rounds),
+      consensus: computeConsensus(s.rounds),
+    }));
   res.json(list);
 });
 
@@ -235,12 +260,18 @@ app.get('/graph/subgraph', (_req: Request, res: Response) => {
 // ── Simulations (create + orchestrate) ───────────────────────────────────────
 
 app.post('/simulations', async (req: Request, res: Response) => {
-  const { eventText, eventId, title } = (req.body ?? {}) as { eventText?: string; eventId?: string; title?: string };
+  const { eventText, eventId, title, config } = (req.body ?? {}) as {
+    eventText?: string;
+    eventId?: string;
+    title?: string;
+    config?: { maxRounds?: number; enableCrisisInjection?: boolean; crisisText?: string };
+  };
 
   if (!eventText && !eventId) {
     return void res.status(400).json({ error: 'Either eventText or eventId is required' });
   }
 
+  const totalRounds = Math.min(5, Math.max(3, config?.maxRounds ?? 3));
   const simulationId = generateId();
   const personaIds = ['gs', 'jpm', 'ms', 'citi', 'bofa'];
   const now = new Date().toISOString();
@@ -251,14 +282,14 @@ app.post('/simulations', async (req: Request, res: Response) => {
     title: title ?? 'Untitled Simulation',
     status: 'running',
     currentRound: 0,
-    totalRounds: 3,
+    totalRounds,
     personaIds,
     eventTitle: title ?? 'Market Event',
     eventSummary: (eventText ?? '').slice(0, 200),
     eventText: eventText ?? '',
     rounds: [],
     crisisEvents: [],
-    pendingCrisis: null,
+    pendingCrisis: (config?.enableCrisisInjection && config.crisisText) ? config.crisisText.trim() : null,
     createdAt: now,
     completedAt: null,
     error: null,

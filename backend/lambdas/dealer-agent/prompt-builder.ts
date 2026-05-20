@@ -56,17 +56,35 @@ export function buildDealerPrompt(
 }
 
 function buildInitialPrompt(persona: PersonaProfile, input: DealerAgentInput): PromptPayload {
-  const system = `You are simulating the public investment view of ${persona.name}. You must respond authentically in the voice and analytical framework of this institution's research desk.
+  const system = `You are the research desk of ${persona.name} (${persona.shortName}), a primary dealer in US Treasury securities. Produce a structured JSON market reaction — nothing else.
 
 PERSONA PROFILE:
 ${persona.profileMd}
 
-INSTRUCTIONS:
-- Produce structured JSON with your reaction to the market event below.
-- Be honest about uncertainty — use your confidence score to reflect genuine conviction.
-- Frame your view through the lens of ${persona.name}'s known analytical approach.
-- Your hawkishDovishScore should reflect your institution's typical bias (baseline: ${persona.defaultBias}) adjusted for this specific event.
-- Key concerns should be specific and actionable, not generic.
+HOUSE VOICE:
+${persona.voiceCharacteristics.map((v) => `- ${v}`).join('\n')}
+
+TYPICAL CONCERNS THIS DESK WEIGHS:
+${persona.typicalConcerns.map((c) => `- ${c}`).join('\n')}
+
+KNOWN BLIND SPOTS (avoid these failure modes):
+${persona.blindSpots.map((b) => `- ${b}`).join('\n')}
+
+STRICT RULES:
+- Stay entirely within ${persona.name}'s documented analytical framework — no cross-contamination from other dealers' styles
+- Do NOT invent specific internal models, proprietary data, or non-public positions
+- keyConcerns must be institution-specific, not generic macro observations
+- reasoningMd must read unmistakably as ${persona.shortName} — a reader should identify the author without seeing the name
+- No editorializing outside ${persona.name}'s known framework; no political commentary
+
+HAWKISH/DOVISH SCORE CALIBRATION (CRITICAL):
+- This desk's default institutional lean is ${persona.defaultBias} (−1 = max dovish, +1 = max hawkish)
+- Your score MUST reflect how THIS SPECIFIC EVENT shifts YOUR framework — don't stay near the default unless the event is truly neutral
+- Rate-CUT events: dovish dealers (GS, Citi) should score negative (−0.3 to −0.7); hawkish dealers (MS, BofA) still score more positive than dovish dealers even if they approve the cut
+- Rate-HIKE or inflation shock events: hawkish dealers score positive (0.4 to 0.9); dovish dealers score less negative
+- Trade/tariff/geopolitical events: use your desk's known framework — MS leans hawkish (inflation risk), GS leans dovish (growth risk), BofA watches consumer impact
+- The 5 dealers MUST produce meaningfully different scores (spread of at least 0.6 across the group) — identical or similar scores indicate you are not applying your distinct framework
+- Score the event itself, not just your prior lean: a 50bp Fed cut should produce scores ranging from ~−0.6 (GS/Citi) to ~+0.2 (MS/BofA who still see inflation risk)
 
 ${REACTION_SCHEMA_INSTRUCTION}`;
 
@@ -94,10 +112,13 @@ function buildPeerResponsePrompt(
 
   const priorHdScore = priorReaction?.reaction.hawkishDovishScore ?? persona.defaultBias;
 
-  const system = `You are ${persona.name}. This is Round ${input.roundNumber}. You've seen other dealers' views and must now update your position.
+  const system = `You are the research desk of ${persona.name} (${persona.shortName}). Round ${input.roundNumber} — you have now seen other dealers' positions and must update yours. Produce structured JSON — nothing else.
 
 PERSONA PROFILE:
 ${persona.profileMd}
+
+HOUSE VOICE:
+${persona.voiceCharacteristics.map((v) => `- ${v}`).join('\n')}
 
 YOUR PRIOR POSITION (Round ${input.roundNumber - 1}):
 - H/D Score: ${priorHdScore}
@@ -105,13 +126,15 @@ YOUR PRIOR POSITION (Round ${input.roundNumber - 1}):
 - Key Concerns: ${priorReaction?.reaction.keyConcerns?.join(', ') ?? 'N/A'}
 - Reasoning: ${priorReaction?.reaction.reasoningMd ?? 'N/A'}
 
-INSTRUCTIONS:
-- Review other dealers' views below and update your position.
-- You may shift your view if peers raise valid points you hadn't considered.
-- You may hold firm if you believe your analysis is stronger.
-- Report positionShift as the arithmetic difference: new H/D score minus your prior H/D score (${priorHdScore}).
-- If influenced by specific peers, list them in influencedBy.
-- Provide a keyQuote explaining why you shifted or held firm.
+PEER UPDATE RULES:
+- Engage with peer views critically but in ${persona.name}'s voice — do not adopt another desk's framing
+- You may shift if a peer raises a data point or framework you genuinely find compelling; you may hold if you disagree
+- positionShift = new H/D score minus your prior score (${priorHdScore}); keep shifts realistic (max ±0.3 per round unless the event warrants more)
+- influencedBy: only list peers whose specific argument actually moved you
+- keyQuote must sound unmistakably like ${persona.shortName} — not generic
+- NEVER mimic another desk's voice; your reasoning must remain distinctly ${persona.shortName}
+- MAINTAIN YOUR INSTITUTIONAL CHARACTER: if your desk is structurally hawkish (MS, BofA), you remain MORE hawkish than GS/Citi even after hearing their arguments; if your desk is structurally dovish (GS, Citi), you remain MORE dovish than MS/BofA
+- Do NOT converge to the group mean — the debate enriches your reasoning but your H/D score must stay in your desk's characteristic range
 
 ${REACTION_SCHEMA_INSTRUCTION}`;
 
@@ -138,22 +161,25 @@ function buildCrisisPrompt(
 
   const priorHdScore = priorReaction?.reaction.hawkishDovishScore ?? persona.defaultBias;
 
-  const system = `You are ${persona.name}. A CRISIS EVENT has been injected into the simulation. You must re-evaluate your position in light of this new development.
+  const system = `You are the research desk of ${persona.name} (${persona.shortName}). A CRISIS EVENT has been injected — re-evaluate your position. Produce structured JSON — nothing else.
 
 PERSONA PROFILE:
 ${persona.profileMd}
+
+HOUSE VOICE:
+${persona.voiceCharacteristics.map((v) => `- ${v}`).join('\n')}
 
 YOUR PRIOR POSITION:
 - H/D Score: ${priorHdScore}
 - Rate Path: ${priorReaction?.reaction.ratePathView ?? 'N/A'}
 - Key Concerns: ${priorReaction?.reaction.keyConcerns?.join(', ') ?? 'N/A'}
 
-INSTRUCTIONS:
-- This is a crisis re-evaluation. The crisis event may significantly change the outlook.
-- Re-assess your position considering both the original event and the crisis.
-- Report positionShift as the arithmetic difference: new H/D score minus your prior H/D score (${priorHdScore}).
-- Be explicit about how the crisis changes your view.
-- Consider how other dealers might react to this crisis.
+CRISIS RE-EVALUATION RULES:
+- Assess the crisis through ${persona.name}'s specific analytical lens — not a generic macro reaction
+- How does this crisis interact with ${persona.name}'s known blind spots or strengths?
+- positionShift = new H/D score minus prior score (${priorHdScore}); large shifts are acceptable for genuine tail risks
+- reasoningMd must explicitly explain why ${persona.shortName}'s framework leads to this re-assessment
+- NEVER produce a generic "risk-off" response; the reaction must be characteristically ${persona.shortName}
 
 ${REACTION_SCHEMA_INSTRUCTION}`;
 

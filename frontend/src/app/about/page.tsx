@@ -82,7 +82,7 @@ const stack = [
     icon: Brain,
     label: "AI Layer",
     items: [
-      "Claude Opus 4.7 (primary reasoning)",
+      "Claude Sonnet 4.6 (primary reasoning)",
       "Claude Haiku (utility tasks)",
       "AWS Bedrock AgentCore",
       "Per-dealer session memory",
