@@ -74,13 +74,13 @@ export function ConsoleHeader() {
           <Link href="/" className="flex items-center gap-2 cursor-pointer">
             <Image
               src="/logo.png"
-              alt="MarketSounding"
+              alt="MarketBuzz"
               width={28}
               height={28}
               className="rounded"
             />
             <span className="font-mono text-sm font-semibold tracking-tight">
-              MarketSounding
+              <span className="text-foreground">Market</span><span className="text-primary">Buzz</span>
             </span>
           </Link>
           <div className="hidden md:flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">

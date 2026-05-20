@@ -14,7 +14,7 @@ export function MarketingFooter() {
                 </span>
               </div>
               <span className="font-mono text-sm font-semibold">
-                MarketSounding
+                MarketBuzz
               </span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
@@ -90,7 +90,7 @@ export function MarketingFooter() {
             </span>
           </div>
           <p className="text-xs text-muted-foreground font-mono">
-            (c) 2026 MarketSounding -- v0.1.0
+            (c) 2026 MarketBuzz -- v0.1.0
           </p>
         </div>
       </div>
