@@ -43,8 +43,10 @@ export default function LoginPage() {
       {/* Left branding panel */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-card border-r border-border p-12">
         <Link href="/" className="flex items-center gap-3 cursor-pointer">
-          <Image src="/logo.png" alt="MarketSounding" width={36} height={36} className="rounded" />
-          <span className="font-mono text-base font-semibold tracking-tight">MarketSounding</span>
+          <Image src="/logo.png" alt="MarketBuzz" width={36} height={36} className="rounded" />
+          <span className="font-mono text-base font-semibold tracking-tight">
+            <span className="text-foreground">Market</span><span className="text-primary">Buzz</span>
+          </span>
         </Link>
 
         <div>
@@ -61,7 +63,7 @@ export default function LoginPage() {
               debate in real time.
             </h2>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-sm">
-              MarketSounding simulates how primary dealers react to market events —
+              MarketBuzz simulates how primary dealers react to market events —
               consensus forming, dissent emerging, and crises shifting positions
               across multiple AI-powered rounds.
             </p>
@@ -99,8 +101,10 @@ export default function LoginPage() {
         >
           {/* Mobile logo */}
           <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <Image src="/logo.png" alt="MarketSounding" width={28} height={28} className="rounded" />
-            <span className="font-mono text-sm font-semibold">MarketSounding</span>
+            <Image src="/logo.png" alt="MarketBuzz" width={28} height={28} className="rounded" />
+            <span className="font-mono text-sm font-semibold">
+              <span className="text-foreground">Market</span><span className="text-primary">Buzz</span>
+            </span>
           </div>
 
           <div className="mb-8">
