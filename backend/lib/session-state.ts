@@ -10,6 +10,9 @@ import { Reaction } from './reaction-parser';
 
 const REACTIONS_TABLE_NAME = process.env.REACTIONS_TABLE_NAME || 'reactions';
 
+// In-memory store for local dev (IS_LOCAL=true bypasses DynamoDB)
+const localSessionStore = new Map<string, DealerSessionState>();
+
 export interface DealerSessionState {
   simulationId: string;
   personaId: string;
@@ -45,6 +48,9 @@ export async function loadSessionState(
   simulationId: string,
   personaId: string
 ): Promise<DealerSessionState> {
+  if (process.env.IS_LOCAL === 'true') {
+    return localSessionStore.get(`${simulationId}#${personaId}`) ?? createEmptySession(simulationId, personaId);
+  }
   try {
     const result = await docClient.send(
       new GetCommand({
@@ -70,6 +76,10 @@ export async function loadSessionState(
  * Save the updated session state after a round completes.
  */
 export async function saveSessionState(state: DealerSessionState): Promise<void> {
+  if (process.env.IS_LOCAL === 'true') {
+    localSessionStore.set(`${state.simulationId}#${state.personaId}`, state);
+    return;
+  }
   await docClient.send(
     new PutCommand({
       TableName: REACTIONS_TABLE_NAME,
