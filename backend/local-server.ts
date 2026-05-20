@@ -10,7 +10,7 @@ process.env.REACTIONS_TABLE_NAME = 'local-reactions';
 process.env.GRAPH_NODES_TABLE_NAME = 'local-graph-nodes';
 process.env.GRAPH_EDGES_TABLE_NAME = 'local-graph-edges';
 process.env.STATE_MACHINE_ARN = '';
-process.env.JWT_SECRET_ARN = '';
+process.env.JWT_SECRET_ARN = 'local';
 
 import express, { Request, Response } from 'express';
 import cors from 'cors';
@@ -112,7 +112,11 @@ function lambdaEvent(req: Request, overrides: Record<string, unknown> = {}): API
 }
 
 function sendLambdaResult(res: Response, result: APIGatewayProxyResult): void {
-  res.status(result.statusCode).json(JSON.parse(result.body));
+  try {
+    res.status(result.statusCode).json(JSON.parse(result.body ?? 'null'));
+  } catch {
+    res.status(result.statusCode).send(result.body ?? '');
+  }
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -128,31 +132,51 @@ app.post('/auth/register', (_req: Request, res: Response) => {
 // ── Research / events / personas ──────────────────────────────────────────────
 
 app.get('/events/samples', async (req: Request, res: Response) => {
-  const result = await researchHandler(lambdaEvent(req));
-  sendLambdaResult(res, result);
+  try {
+    const result = await researchHandler(lambdaEvent(req));
+    sendLambdaResult(res, result);
+  } catch (err) {
+    console.error('/events/samples error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 app.post('/events/research', async (req: Request, res: Response) => {
-  const result = await researchHandler(lambdaEvent(req));
-  sendLambdaResult(res, result);
+  try {
+    const result = await researchHandler(lambdaEvent(req));
+    sendLambdaResult(res, result);
+  } catch (err) {
+    console.error('/events/research error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 app.get('/personas', async (req: Request, res: Response) => {
-  const result = await researchHandler(lambdaEvent(req));
-  sendLambdaResult(res, result);
+  try {
+    const result = await researchHandler(lambdaEvent(req));
+    sendLambdaResult(res, result);
+  } catch (err) {
+    console.error('/personas error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
 app.post('/chat/:personaId', async (req: Request, res: Response) => {
-  const token = makeToken();
-  const result = await (chatHandler as (e: APIGatewayProxyEvent) => Promise<APIGatewayProxyResult>)(
-    lambdaEvent(req, {
-      pathParameters: { personaId: req.params.personaId },
-      headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    }),
-  );
-  sendLambdaResult(res, result);
+  try {
+    const token = makeToken();
+    const result = await (chatHandler as (e: APIGatewayProxyEvent) => Promise<APIGatewayProxyResult>)(
+      lambdaEvent(req, {
+        pathParameters: { personaId: req.params.personaId },
+        headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      }),
+    );
+    sendLambdaResult(res, result);
+  } catch (err) {
+    console.error('/chat/:personaId error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // ── Simulations (read) ────────────────────────────────────────────────────────
@@ -318,7 +342,10 @@ function accumulateGraph(sim: LocalSimulation): void {
         }
       }
       for (const influencer of reaction.influencedBy ?? []) {
-        localGraph.edges.push({ sourceNodeId: `dealer:${influencer}`, targetNodeId: dealerId, edgeType: 'influence', weight: Math.abs(reaction.positionShift ?? 0) });
+        const src = `dealer:${influencer}`;
+        if (!localGraph.edges.find((e) => e.sourceNodeId === src && e.targetNodeId === dealerId && e.edgeType === 'influence')) {
+          localGraph.edges.push({ sourceNodeId: src, targetNodeId: dealerId, edgeType: 'influence', weight: Math.abs(reaction.positionShift ?? 0) });
+        }
       }
     }
   }

@@ -33,7 +33,9 @@ export async function validateToken(event: APIGatewayProxyEvent): Promise<UserSe
   const token = parts[1];
 
   try {
-    const jwtSecret = await getSecret(JWT_SECRET_ARN);
+    const jwtSecret = process.env.IS_LOCAL === 'true'
+      ? (process.env.JWT_SECRET ?? 'local-dev-secret-not-for-production')
+      : await getSecret(JWT_SECRET_ARN);
     const decoded = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as jwt.JwtPayload;
 
     if (!decoded.userId || !decoded.username) {
