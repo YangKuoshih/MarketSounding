@@ -157,7 +157,7 @@ export default function LandingPage() {
                 transition={{ duration: 0.5, delay: 0.1 }}
                 className="mt-6 max-w-2xl text-lg text-muted-foreground leading-relaxed"
               >
-                MarketSounding runs multi-round AI agent roundtables modeling how
+                MarketBuzz runs multi-round AI agent roundtables modeling how
                 5 primary dealers react to market events -- watching consensus
                 form, dissent emerge, and crises shift positions.
               </motion.p>

@@ -18,7 +18,7 @@ function getPageContext(pathname: string): { label: string; context: string; int
   if (pathname === "/console") {
     return {
       label: "Dashboard",
-      context: "The user is on the MarketSounding Console Dashboard. They can search for a market topic to start a simulation, or pick a sample event. The system runs 5 primary dealer AI agents (GS, JPM, MS, Citi, BofA) through multi-round debates.",
+      context: "The user is on the MarketBuzz Console Dashboard. They can search for a market topic to start a simulation, or pick a sample event. The system runs 5 primary dealer AI agents (GS, JPM, MS, Citi, BofA) through multi-round debates.",
       intro: "I'm Jarrett, your market intelligence guide. You're on the **Dashboard** — enter any market topic to run a dealer roundtable, or pick a sample to see how it works. What can I help you with?",
     };
   }
@@ -53,21 +53,21 @@ function getPageContext(pathname: string): { label: string; context: string; int
   if (pathname.startsWith("/about")) {
     return {
       label: "About",
-      context: "The user is on the About page which explains the MarketSounding system, its 5 dealer personas (GS, JPM, MS, Citi, BofA), tech stack, and mission.",
+      context: "The user is on the About page which explains the MarketBuzz system, its 5 dealer personas (GS, JPM, MS, Citi, BofA), tech stack, and mission.",
       intro: "Welcome — you're exploring the **About** page. I can tell you more about how the dealer personas are calibrated, how the multi-round protocol works, or how to get started. What's your question?",
     };
   }
   if (pathname === "/" || pathname.startsWith("/#")) {
     return {
       label: "Home",
-      context: "The user is on the MarketSounding home page, learning about the product.",
-      intro: "Hi, I'm **Jarrett** — MarketSounding's market intelligence guide. I can explain how the system works, walk you through what a simulation looks like, or help you get started. What do you want to know?",
+      context: "The user is on the MarketBuzz home page, learning about the product.",
+      intro: "Hi, I'm **Jarrett** — MarketBuzz's market intelligence guide. I can explain how the system works, walk you through what a simulation looks like, or help you get started. What do you want to know?",
     };
   }
   return {
-    label: "MarketSounding",
-    context: "The user is using MarketSounding, a multi-agent market reaction simulator.",
-    intro: "Hi, I'm **Jarrett** — ask me anything about MarketSounding, the dealer agents, or how to interpret results.",
+    label: "MarketBuzz",
+    context: "The user is using MarketBuzz, a multi-agent market reaction simulator.",
+    intro: "Hi, I'm **Jarrett** — ask me anything about MarketBuzz, the dealer agents, or how to interpret results.",
   };
 }
 
@@ -388,5 +388,5 @@ function getSuggestedPrompts(pathname: string): string[] {
   if (pathname.startsWith("/about")) {
     return ["How are personas calibrated?", "What is the roundtable protocol?"];
   }
-  return ["How does MarketSounding work?", "What is Jarrett?", "How do I get started?"];
+  return ["How does MarketBuzz work?", "What is Jarrett?", "How do I get started?"];
 }
