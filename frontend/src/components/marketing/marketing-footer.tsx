@@ -10,7 +10,7 @@ export function MarketingFooter() {
             <div className="flex items-center gap-2 mb-4">
               <div className="flex h-7 w-7 items-center justify-center rounded bg-primary">
                 <span className="font-mono text-xs font-bold text-primary-foreground">
-                  MS
+                  MB
                 </span>
               </div>
               <span className="font-mono text-sm font-semibold">
