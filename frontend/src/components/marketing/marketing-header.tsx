@@ -22,13 +22,13 @@ export function MarketingHeader() {
         <Link href="/" className="flex items-center gap-2 cursor-pointer">
           <Image
             src="/logo.png"
-            alt="MarketSounding"
+            alt="MarketBuzz"
             width={32}
             height={32}
             className="rounded"
           />
           <span className="font-mono text-base font-semibold tracking-tight">
-            MarketSounding
+            <span className="text-foreground">Market</span><span className="text-primary">Buzz</span>
           </span>
         </Link>
 

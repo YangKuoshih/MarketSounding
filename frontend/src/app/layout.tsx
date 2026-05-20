@@ -17,7 +17,7 @@ const firaCode = Fira_Code({
 });
 
 export const metadata: Metadata = {
-  title: "MarketSounding -- Multi-Agent Market Reaction Simulator",
+  title: "MarketBuzz -- Multi-Agent Market Reaction Simulator",
   description:
     "Simulate how primary dealers react to market events through multi-round AI agent roundtables. Watch consensus form, dissent emerge, and crises shift positions.",
 };
