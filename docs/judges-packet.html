@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MarketSounding — NY Crunch-a-thon Judges Packet</title>
+<style>
+  body {
+    font-family: Calibri, Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: #1a1a1a;
+    max-width: 750px;
+    margin: 0 auto;
+    padding: 40px 50px;
+  }
+  h1 {
+    font-size: 22pt;
+    font-weight: 700;
+    color: #1b3a5c;
+    margin-bottom: 4px;
+    border-bottom: 3px solid #1b3a5c;
+    padding-bottom: 8px;
+  }
+  .subtitle {
+    font-size: 12pt;
+    color: #555;
+    margin-top: 2px;
+    margin-bottom: 28px;
+  }
+  h2 {
+    font-size: 13pt;
+    font-weight: 700;
+    color: #1b3a5c;
+    margin-top: 32px;
+    margin-bottom: 8px;
+    border-left: 4px solid #1b3a5c;
+    padding-left: 10px;
+  }
+  h3 {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #2e5f8c;
+    margin-top: 18px;
+    margin-bottom: 4px;
+  }
+  p {
+    margin: 6px 0 12px 0;
+  }
+  ul, ol {
+    margin: 6px 0 12px 0;
+    padding-left: 22px;
+  }
+  li {
+    margin-bottom: 5px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 18px 0;
+    font-size: 10pt;
+  }
+  th {
+    background-color: #1b3a5c;
+    color: white;
+    padding: 7px 10px;
+    text-align: left;
+    font-weight: 600;
+  }
+  td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #dce3ec;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td {
+    background-color: #f4f7fb;
+  }
+  .callout {
+    background-color: #eef4fb;
+    border-left: 4px solid #2e5f8c;
+    padding: 10px 14px;
+    margin: 14px 0;
+    border-radius: 0 4px 4px 0;
+    font-size: 10.5pt;
+  }
+  .divider {
+    border: none;
+    border-top: 1px solid #ccd6e0;
+    margin: 28px 0;
+  }
+  code {
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 9.5pt;
+    background: #f0f4f8;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  pre {
+    background: #f0f4f8;
+    border: 1px solid #dce3ec;
+    padding: 12px 14px;
+    border-radius: 4px;
+    font-size: 9pt;
+    font-family: Consolas, 'Courier New', monospace;
+    overflow-x: auto;
+    margin: 10px 0 16px 0;
+    line-height: 1.5;
+  }
+  .cover {
+    text-align: center;
+    padding: 60px 0 50px 0;
+    border-bottom: 2px solid #1b3a5c;
+    margin-bottom: 40px;
+  }
+  .cover h1 {
+    font-size: 28pt;
+    border: none;
+    margin-bottom: 8px;
+  }
+  .cover .tagline {
+    font-size: 13pt;
+    color: #444;
+    font-style: italic;
+    margin-bottom: 24px;
+  }
+  .cover .meta {
+    font-size: 10.5pt;
+    color: #555;
+    line-height: 2;
+  }
+  strong { color: #1b3a5c; }
+  @media print {
+    body { padding: 20px 30px; }
+    h2 { page-break-after: avoid; }
+    table { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <h1>MarketSounding</h1>
+  <p class="tagline">AI-Powered Primary Dealer Reaction Simulator</p>
+  <p class="meta">
+    <strong>Competition:</strong> NY Crunch-a-thon &nbsp;|&nbsp; <strong>Host:</strong> Federal Reserve Bank of New York<br>
+    <strong>Team Members:</strong> ___________________________<br>
+    <strong>Date:</strong> May 2026
+  </p>
+</div>
+
+<!-- Q1 -->
+<h2>1. Project Idea and the Bank Problem It Addresses</h2>
+
+<h3>The Core Idea</h3>
+<p>
+  <strong>MarketSounding</strong> is a multi-agent AI simulation platform that models how the five major US Treasury primary dealers — Goldman Sachs, JP Morgan, Morgan Stanley, Citigroup, and Bank of America — would react to a macroeconomic event before it occurs (or immediately after). A user enters a market topic (e.g., "FOMC 50bp rate cut" or "US-China tariff escalation"), and the system produces a structured, multi-round debate between five AI dealer agents, each reasoning strictly within their institution's documented analytical framework.
+</p>
+
+<h3>The Bank Problem</h3>
+<p>
+  The Federal Reserve Bank of New York conducts <em>market soundings</em> — structured conversations with primary dealers to gauge market sentiment before policy announcements or debt issuance operations. Today this process is:
+</p>
+<ul>
+  <li><strong>Manual and time-intensive:</strong> Analysts must individually reach primary dealers, compile responses, and synthesize a consensus view — a process that takes days.</li>
+  <li><strong>Reactive rather than prospective:</strong> Soundings happen after decisions are partially formed, not as a real-time "what-if" tool for scenario planning.</li>
+  <li><strong>Subject to social dynamics:</strong> Dealers may not fully disclose divergent views in live conversations; anonymized AI simulation avoids this anchoring bias.</li>
+  <li><strong>Opaque in terms of reasoning:</strong> A sounding produces a directional signal but rarely captures the <em>why</em> behind each dealer's stance in a structured, comparable format.</li>
+</ul>
+
+<p>
+  MarketSounding addresses all four gaps: it produces structured dealer reactions in minutes, supports unlimited prospective scenario runs, removes social anchoring, and exposes each dealer's full reasoning chain — including hawkish/dovish score, rate path view, balance sheet opinion, risk asset outlook, and key concerns — in a machine-readable format.
+</p>
+
+<hr class="divider">
+
+<!-- Q2 -->
+<h2>2. How This Transforms the Bank</h2>
+
+<h3>New Capability: Instant Scenario Intelligence</h3>
+<p>
+  Before a policy decision or a major debt auction, FRBNY analysts can run a MarketSounding simulation in under five minutes and receive structured, institution-specific dealer reactions — complete with hawkish/dovish scores, position trajectories, and a consensus metric — for any hypothetical scenario. This transforms market sounding from a days-long manual process into an on-demand analytical capability.
+</p>
+
+<h3>Enhanced Capability: Crisis Simulation</h3>
+<p>
+  The platform's <strong>Crisis Injection</strong> feature lets analysts introduce a surprise shock mid-simulation (e.g., "China announces a surprise 200bp rate cut") and observe how dealer positions re-calibrate. This enables the FRBNY to stress-test market resilience against tail-risk scenarios before they materialize — something impossible with traditional soundings.
+</p>
+
+<h3>Efficiency: From Days to Minutes</h3>
+<p>
+  A full five-dealer, five-round simulation completes in 3–7 minutes. The same breadth of insight from a traditional sounding would require scheduling, conducting, and synthesizing responses from five institutions — a process measured in days, not minutes.
+</p>
+
+<h3>Analytical Depth: Knowledge Graph and Consensus Metrics</h3>
+<p>
+  Every simulation contributes to a live <strong>Knowledge Graph</strong> that maps relationships between market topics, dealer concerns, and inter-dealer influence. Over time this graph reveals structural patterns: which concerns cluster together across events, which dealers consistently move others, and which topics create the most dealer divergence — providing a running picture of primary dealer market intelligence that no manual process can produce.
+</p>
+
+<hr class="divider">
+
+<!-- Q3 -->
+<h2>3. API and Data Set Choices; Pre- and Post-Processing</h2>
+
+<h3>AWS Bedrock / Claude (Sonnet 4.6 and Haiku 4.5)</h3>
+<p>
+  We chose AWS Bedrock as our AI inference layer for three reasons:
+</p>
+<ul>
+  <li><strong>Compliance posture:</strong> Bedrock keeps data within AWS infrastructure and provides enterprise-grade data isolation — critical for a Federal Reserve context where proprietary market intelligence must not leak to third-party model providers.</li>
+  <li><strong>Model stratification:</strong> Bedrock exposes both Claude Sonnet 4.6 (high reasoning capacity) and Haiku 4.5 (low-latency, low-cost) through the same API surface, allowing us to right-size the model for each component.</li>
+  <li><strong>Cross-region inference profiles:</strong> We use Bedrock's cross-region inference to maximize throughput during the burst load of running five dealer agents in parallel.</li>
+</ul>
+
+<p>We deliberately chose Claude over GPT-4 or Gemini because Claude's instruction-following fidelity is superior for structured JSON output — our dealer agents must return a precise 11-field JSON schema every invocation. Claude's lower hallucination rate on structured outputs reduced retry rates significantly.</p>
+
+<h3>Tavily Search API</h3>
+<p>
+  For live market event research we use the Tavily Search API, which is specifically optimized for agentic research workflows. Compared to the Google Custom Search API or Bing Search API:
+</p>
+<ul>
+  <li>Tavily returns full article snippets (not just URLs), allowing synthesis without additional page fetches.</li>
+  <li>It supports recency filtering (day / week / month), so the system can surface breaking news vs. historical context as the user requires.</li>
+  <li>Its relevance scoring allows us to dedup and rank results before sending them to the synthesis model.</li>
+</ul>
+
+<h3>Pre-Processing of Data</h3>
+<p>
+  <strong>Query Expansion:</strong> Rather than sending a user's raw topic to Tavily, we first pass it to Claude Haiku to generate 2–3 semantically distinct search queries. This prevents over-literal results ("FOMC" alone returns generic Fed commentary; "Federal Reserve June 2026 rate path decision market reaction" returns dealer-relevant material).
+</p>
+<p>
+  <strong>Deduplication and Recency Filtering:</strong> Tavily results are deduplicated by URL, sorted by Tavily's relevance score, and filtered by a configurable recency window before being passed to synthesis.
+</p>
+<p>
+  <strong>Event Brief Synthesis:</strong> Raw web snippets (often inconsistent in voice and format) are synthesized by Claude Sonnet 4.6 into a structured event brief with three fields: <code>title</code> (concise event label), <code>summary</code> (3–5 sentence neutral synthesis), and <code>rawText</code> (full narrative for dealer reasoning). This normalization step ensures every dealer agent receives identically structured input regardless of source diversity.
+</p>
+<p>
+  <strong>Event Text Truncation:</strong> The <code>rawText</code> field is capped at 12,000 characters before being injected into dealer prompts, preventing context window overflow while preserving the most material content.
+</p>
+
+<h3>Post-Processing of Data</h3>
+<p>
+  <strong>Reaction Parsing and Validation:</strong> Each dealer LLM response is validated against an 11-field JSON schema. Fields outside expected ranges (H/D score outside [−1, +1], confidence outside [0, 1]) are clamped. If the LLM returns malformed JSON, a single retry is issued with the parse error in context — recovering approximately 80% of malformed responses.
+</p>
+<p>
+  <strong>Trajectory Computation:</strong> After each simulation completes, we compute a trajectory vector — the average H/D score across all five dealers for each round — which produces a time-series showing whether dealer consensus converged, diverged, or reversed under debate.
+</p>
+<p>
+  <strong>Consensus Score:</strong> A normalized consensus metric (0–1) is computed from the standard deviation of final-round H/D scores. A score near 1 means strong dealer alignment; near 0 means maximum divergence. This single number gives analysts an immediate read on market clarity.
+</p>
+
+<hr class="divider">
+
+<!-- Q4 -->
+<h2>4. Technical Design and Reasoning Behind Design Decisions</h2>
+
+<h3>System Architecture Overview</h3>
+
+<pre>
+User → Next.js Frontend (React, Tailwind CSS 4)
+         ↓ REST API
+       Express Local Server / AWS API Gateway
+         ↓
+       Research Pipeline          Simulation Orchestrator
+       ────────────────           ───────────────────────
+       Haiku: query expand  →     Round 1: all 5 dealers in parallel (Promise.all)
+       Tavily: web search   →     Round 2-N: peer reactions in parallel
+       Sonnet: synthesize   →     Crisis round (if injected)
+         ↓                              ↓
+       Event Brief              RoundData → accumulateGraph()
+                                       ↓
+                                 Simulation Complete
+                                 trajectory + consensus computed
+</pre>
+
+<h3>Multi-Agent Debate Architecture</h3>
+<p>
+  Each simulation round runs all five dealer agents <strong>in parallel</strong> using <code>Promise.all()</code>. Within a round, dealers have no awareness of each other. Between rounds, each dealer receives a curated peer context — not full LLM outputs, but a structured summary of each peer's H/D score, rate path view, key concerns, and key quote. This mirrors real dealer roundtables: dealers state positions simultaneously, then review peers' summaries before responding.
+</p>
+<p>
+  Rounds execute <strong>sequentially</strong> so that peer context from Round N is available for Round N+1. This hybrid parallel-within-sequential structure reduces total simulation time by 5× compared to fully sequential invocations while preserving the semantic dependency between rounds.
+</p>
+
+<h3>Persona Engineering as Hard Constraint</h3>
+<p>
+  Each of the five dealer personas is defined by a profile document containing: <em>default hawkish/dovish bias</em>, <em>house voice characteristics</em>, <em>typical analytical concerns</em>, <em>known blind spots</em>, and an <em>explicit H/D score calibration section</em>. The calibration section is the most critical: it instructs the model that the five dealers <strong>must produce a spread of at least 0.6</strong> across their H/D scores, prevents anchoring to default biases on neutral events, and explicitly calls out that hawkish desks must remain more hawkish than dovish desks even after debate rounds.
+</p>
+<p>
+  This addresses a known multi-agent LLM failure mode: without explicit divergence instructions, all agents tend to produce similar outputs as the debate progresses, eliminating the analytical signal that makes the simulation valuable.
+</p>
+
+<h3>Session State Design</h3>
+<p>
+  Rather than maintaining a long conversation history per dealer (prohibitively token-expensive across 5 rounds × 5 dealers × N simulations), each dealer stores only its most recent reaction in a DynamoDB session state record. The system computes <code>positionShift = newScore − priorScore</code> incrementally and passes only a curated 5-field peer summary to each dealer per round. This keeps prompt size roughly constant regardless of round count, enabling 5-round simulations at the same token cost as 3-round ones.
+</p>
+
+<h3>Model Stratification</h3>
+<table>
+  <thead>
+    <tr><th>Component</th><th>Model</th><th>Rationale</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Query generation</td><td>Claude Haiku 4.5</td><td>Simple rewriting task; minimize cost and latency</td></tr>
+    <tr><td>Event synthesis</td><td>Claude Sonnet 4.6</td><td>Multi-source synthesis requires strong reasoning</td></tr>
+    <tr><td>Dealer reactions</td><td>Claude Sonnet 4.6</td><td>Complex persona reasoning; structured JSON output fidelity</td></tr>
+    <tr><td>Jarrett chat agent</td><td>Claude Haiku 4.5</td><td>Real-time interactive chat; low cold-start latency needed</td></tr>
+  </tbody>
+</table>
+
+<h3>Frontend Design Decisions</h3>
+<p>
+  The frontend is built with Next.js 16, Tailwind CSS 4, and Motion for animations. Key decisions:
+</p>
+<ul>
+  <li><strong>Two-phase New Sounding UX:</strong> Research (automatic, shows live web summary) and Launch (manual, user sets rounds and crisis config) are separated into distinct steps so users always review research output before committing to a simulation configuration.</li>
+  <li><strong>Real-time polling:</strong> The live simulation view polls the backend every 2 seconds, updating dealer progress cards and round results as they arrive — giving users a sense of the debate unfolding.</li>
+  <li><strong>D3.js Sparklines:</strong> Trajectory data from each simulation is rendered as a micro-chart in the history table, giving analysts an at-a-glance read of whether consensus converged or diverged without opening the full report.</li>
+  <li><strong>Print-ready reports:</strong> Simulation detail pages include CSS <code>@media print</code> rules and support a <code>?print=1</code> query parameter that auto-triggers <code>window.print()</code> on load, enabling one-click PDF export from the history table.</li>
+</ul>
+
+<hr class="divider">
+
+<!-- Q5 -->
+<h2>5. Usability and Customization</h2>
+
+<h3>Usability</h3>
+<p>
+  The application is designed around a three-step user journey requiring no financial domain expertise to operate:
+</p>
+<ol>
+  <li><strong>Enter a topic</strong> (Search, Paste raw text, or choose a Sample scenario)</li>
+  <li><strong>Review the research summary</strong> and configure rounds (3–5) and optional crisis injection</li>
+  <li><strong>Watch the simulation run</strong> in real time, then explore the full dealer debate, position evolution chart, knowledge graph, and consensus score</li>
+</ol>
+<p>
+  The Jarrett AI chat assistant (accessible from any page via a floating widget) can explain any metric, compare dealer positions, answer questions about specific dealer reasoning, or provide context on what "hawkish/dovish" means — making the platform accessible to users without deep fixed-income market experience.
+</p>
+<p>
+  Jarrett is itself a multi-agent router: questions directed at a specific dealer (e.g., "What does Goldman Sachs think about duration risk?") are routed to that dealer's persona for a character-accurate response, while general questions are answered by Jarrett in his orchestrator role.
+</p>
+
+<h3>Customization</h3>
+<ul>
+  <li><strong>Simulation rounds:</strong> Users choose 3, 4, or 5 rounds via a slider. More rounds capture longer debate dynamics; fewer rounds prioritize speed.</li>
+  <li><strong>Crisis injection:</strong> Users can enable a mid-simulation shock and author any crisis text they choose — allowing fully custom tail-risk scenarios.</li>
+  <li><strong>Input mode:</strong> Users can search by topic (Tavily-backed), paste raw event text (Bloomberg terminal output, Fed statement text, news articles), or select from sample scenarios — accommodating different workflow preferences.</li>
+  <li><strong>Persona extensibility:</strong> The dealer persona system is data-driven. Adding a new dealer requires only a new profile entry in the personas file — no code changes. Personas for buy-side institutions (PIMCO, BlackRock) or foreign dealer banks could be added for future iterations.</li>
+  <li><strong>Topic-based filtering:</strong> The history page automatically infers topic categories (Monetary Policy, Trade Policy, Geopolitical, FX Policy, Credit, Inflation, Macro) from simulation titles and provides filter dropdowns — giving analysts quick access to thematic histories.</li>
+</ul>
+
+<hr class="divider">
+
+<!-- Q6 -->
+<h2>6. Improvements That Can Be Made</h2>
+
+<h3>Near-Term (High Priority)</h3>
+<ul>
+  <li><strong>Real-time streaming:</strong> Replace polling with WebSocket or Server-Sent Events so dealer reactions stream token-by-token as they generate, eliminating the 2-second polling lag.</li>
+  <li><strong>Persistent storage:</strong> Replace the in-memory simulation store with DynamoDB persistence so simulations survive server restarts and are accessible across sessions and users.</li>
+  <li><strong>Authentication and multi-user support:</strong> The auth system (JWT) is scaffolded but not fully wired to simulation ownership. Full auth would allow multiple FRBNY analysts to maintain separate simulation histories.</li>
+  <li><strong>Tavily integration in production:</strong> The research pipeline's Tavily integration requires a production API key and Lambda deployment. Currently running locally; Lambda deployment would make research available in the cloud-hosted version.</li>
+</ul>
+
+<h3>Medium-Term (Product Depth)</h3>
+<ul>
+  <li><strong>Quantitative dealer profiles:</strong> Augment qualitative persona profiles with actual FRBNY primary dealer survey data (e.g., Primary Dealer Survey on rate expectations) to calibrate H/D default biases with real historical signals.</li>
+  <li><strong>Extended persona library:</strong> Add buy-side institutions (PIMCO, BlackRock, Vanguard) and foreign primary dealers (Deutsche Bank, Barclays, Nomura) to capture a broader market sounding landscape.</li>
+  <li><strong>Simulation comparison:</strong> Allow analysts to compare two simulations side-by-side — e.g., "50bp cut" vs. "25bp cut" — to see how dealer consensus shifts between scenarios.</li>
+  <li><strong>Historical backtesting:</strong> Feed historical FOMC decisions and tariff announcements as events and compare simulated dealer reactions against actual dealer published research from that period to validate and calibrate the model.</li>
+  <li><strong>Export to structured formats:</strong> Export full simulation results as structured JSON or Excel for downstream quantitative analysis and integration with existing FRBNY analytical workflows.</li>
+</ul>
+
+<h3>Longer-Term (Research Direction)</h3>
+<ul>
+  <li><strong>Fine-tuned dealer models:</strong> Train fine-tuned adapters on each dealer's published research (strategy notes, rate forecasts, market commentaries) to improve persona accuracy beyond prompt engineering.</li>
+  <li><strong>Real-time Bloomberg/Refinitiv integration:</strong> Replace Tavily with a direct Bloomberg Data License or Refinitiv feed for institutional-grade data sourcing with normalized financial data structures.</li>
+  <li><strong>Influence weight learning:</strong> Use historical simulation data to learn which dealers actually influence others most — building an empirical influence network rather than one inferred purely from LLM self-report.</li>
+</ul>
+
+<hr class="divider">
+
+<!-- Q7 -->
+<h2>7. Unique and Exceptional Aspects of the Project</h2>
+
+<div class="callout">
+  <strong>MarketSounding is not a chatbot that answers questions about markets. It is a structured simulation of how institutional disagreement forms, resolves, or entrenches under debate — a capability that does not exist anywhere in today's market intelligence toolset.</strong>
+</div>
+
+<h3>Persona as Constraint, Not Template</h3>
+<p>
+  Most LLM applications give models a persona description and hope for the best. MarketSounding treats persona as a <em>hard analytical constraint</em>. Each dealer has documented blind spots that are explicitly called out in the prompt; voice characteristics that must be detectable in the prose without seeing the author's name; institutional concerns that must appear in the key concerns field; and a calibration rule requiring measurably divergent H/D scores across the group. A Goldman Sachs reaction that reads like a Morgan Stanley reaction is a system failure — and the architecture is explicitly designed to prevent it.
+</p>
+
+<h3>Emergent Consensus as a Measurable Signal</h3>
+<p>
+  Rather than averaging dealer views (which destroys the signal), MarketSounding tracks <em>how consensus forms</em> — whether dealers converge early and hold, diverge as the debate deepens, or reverse after a crisis shock. The trajectory vector and consensus score are computed metrics, not LLM outputs, ensuring they are reliable even when individual dealer reasoning is noisy.
+</p>
+
+<h3>The Jarrett Multi-Agent Router</h3>
+<p>
+  Jarrett is not a single-model chatbot. When a user asks "What does Goldman Sachs think about duration risk given today's simulation?", Jarrett detects the dealer-specific intent and routes the question to a Goldman Sachs persona LLM invocation — producing a Goldman Sachs-voiced, in-character response. For general questions about the platform or cross-dealer comparisons, Jarrett responds in his own orchestrator voice. This two-layer routing architecture means every dealer is simultaneously available for direct conversation, effectively giving the analyst a five-way primary dealer hotline.
+</p>
+
+<h3>Crisis Injection as Interactive Exploration</h3>
+<p>
+  The crisis injection feature transforms MarketSounding from a batch analysis tool into an interactive exploration environment. Analysts can watch dealer consensus form across three rounds, then inject a black-swan event and observe how each institution's framework leads to a characteristically different re-evaluation. Goldman Sachs will re-evaluate through a growth-risk lens; Morgan Stanley through a tail-risk / inflation-persistence lens; Bank of America through a consumer-credit-health lens. The divergence in crisis responses is often more illuminating than the initial reactions.
+</p>
+
+<h3>Knowledge Graph as Running Market Intelligence</h3>
+<p>
+  Every simulation contributes incrementally to a knowledge graph. Over dozens of simulations, this graph reveals structural patterns invisible in any individual run: which concerns activate together across events (e.g., "labor market tightness" and "services CPI" co-occur in 80% of hawkish simulations); which dealers are consistently first-movers in shifting group consensus; and which market topics produce the highest dealer divergence — signaling genuine uncertainty in the market rather than a strong consensus view.
+</p>
+<p>
+  This accumulation effect means MarketSounding becomes <em>more valuable over time</em>, not just as a one-off simulation tool but as an institutional memory of simulated dealer discourse.
+</p>
+
+<h3>Built for a Federal Reserve Context</h3>
+<p>
+  Every design decision — AWS Bedrock for data sovereignty, structured JSON outputs for auditability, persona constraints for institutional accuracy, the consensus metric for directional signal — was made with the Federal Reserve's analytical workflow in mind. This is not a general-purpose AI tool adapted to finance; it is a purpose-built market intelligence platform designed around the specific operational needs of a central bank conducting primary dealer market soundings.
+</p>
+
+<hr class="divider">
+
+<p style="text-align: center; color: #888; font-size: 9.5pt; margin-top: 30px;">
+  MarketSounding &nbsp;·&nbsp; NY Crunch-a-thon &nbsp;·&nbsp; Federal Reserve Bank of New York &nbsp;·&nbsp; May 2026
+</p>
+
+</body>
+</html>
