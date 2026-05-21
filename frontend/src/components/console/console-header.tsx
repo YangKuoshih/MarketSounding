@@ -23,7 +23,7 @@ import { clearToken } from "@/lib/api-client";
 
 const navItems = [
   { href: "/console", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/console/sounding/new", label: "New Sounding", icon: Plus },
+  { href: "/console/sounding/new", label: "New Simulation", icon: Plus },
   { href: "/chat", label: "Jarrett", icon: MessagesSquare },
   { href: "/console/graph", label: "Knowledge Graph", icon: Network },
   { href: "/console/history", label: "History", icon: Clock },

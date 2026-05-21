@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import {
@@ -11,153 +11,27 @@ import {
   AlertTriangle,
   Network,
   ArrowRight,
+  X,
+  Clock,
+  Trash2,
 } from "lucide-react";
 import {
   KnowledgeGraph,
   type GraphNode,
   type GraphEdge,
 } from "@/components/viz/knowledge-graph";
-import { api, ApiError } from "@/lib/api-client";
+import { type GraphQuerySpec } from "@/components/chat-graph-query";
+import { api, ApiError, type GraphQueryRecord } from "@/lib/api-client";
 
-const sampleNodes: GraphNode[] = [
-  {
-    id: "dealer:gs",
-    type: "dealer",
-    label: "GS",
-    metadata: {
-      avgHawkishDovishScore: -0.25,
-      simulationCount: 12,
-      topConcerns: ["Inflation", "Wages", "Rate Path"],
-    },
-  },
-  {
-    id: "dealer:jpm",
-    type: "dealer",
-    label: "JPM",
-    metadata: {
-      avgHawkishDovishScore: 0.1,
-      simulationCount: 12,
-      topConcerns: ["Wages", "Fiscal Deficit"],
-    },
-  },
-  {
-    id: "dealer:ms",
-    type: "dealer",
-    label: "MS",
-    metadata: {
-      avgHawkishDovishScore: 0.45,
-      simulationCount: 12,
-      topConcerns: ["FCI", "Shelter", "Geopolitical"],
-    },
-  },
-  {
-    id: "dealer:citi",
-    type: "dealer",
-    label: "Citi",
-    metadata: {
-      avgHawkishDovishScore: -0.05,
-      simulationCount: 12,
-      topConcerns: ["Recession", "CRE"],
-    },
-  },
-  {
-    id: "dealer:bofa",
-    type: "dealer",
-    label: "BofA",
-    metadata: {
-      avgHawkishDovishScore: 0.3,
-      simulationCount: 12,
-      topConcerns: ["Consumer", "Labor Supply"],
-    },
-  },
-  {
-    id: "topic:fomc-jun",
-    type: "topic",
-    label: "FOMC June",
-    metadata: {
-      eventDate: "2026-06-12",
-      eventTitle: "FOMC June 2026 Decision",
-      consensusScore: 0.62,
-    },
-  },
-  {
-    id: "topic:tariffs",
-    type: "topic",
-    label: "China Tariffs",
-    metadata: {
-      eventDate: "2026-04-08",
-      eventTitle: "US-China Tariff Escalation",
-      consensusScore: 0.41,
-    },
-  },
-  {
-    id: "topic:oil",
-    type: "topic",
-    label: "Oil Shock",
-    metadata: {
-      eventDate: "2026-03-15",
-      eventTitle: "Middle East Oil Supply Shock",
-      consensusScore: 0.78,
-    },
-  },
-  {
-    id: "concern:inflation",
-    type: "concern",
-    label: "Inflation",
-    metadata: { frequency: 24, category: "macro", dealerIds: ["gs", "ms", "bofa"] },
-  },
-  {
-    id: "concern:wages",
-    type: "concern",
-    label: "Wages",
-    metadata: { frequency: 18, category: "macro", dealerIds: ["gs", "jpm"] },
-  },
-  {
-    id: "concern:fci",
-    type: "concern",
-    label: "FCI",
-    metadata: { frequency: 15, category: "market", dealerIds: ["ms", "citi"] },
-  },
-  {
-    id: "concern:supply-chain",
-    type: "concern",
-    label: "Supply Chain",
-    metadata: { frequency: 9, category: "geopolitical", dealerIds: ["ms", "bofa"] },
-  },
-  {
-    id: "crisis:china-stim",
-    type: "crisis",
-    label: "China Stim",
-    metadata: { crisisText: "China announces surprise 200bp rate cut and $2T stimulus" },
-  },
-];
-
-const sampleEdges: GraphEdge[] = [
-  { source: "topic:fomc-jun", target: "dealer:gs", edgeType: "topic", weight: 0.5 },
-  { source: "topic:fomc-jun", target: "dealer:jpm", edgeType: "topic", weight: 0.5 },
-  { source: "topic:fomc-jun", target: "dealer:ms", edgeType: "topic", weight: 0.5 },
-  { source: "topic:fomc-jun", target: "dealer:citi", edgeType: "topic", weight: 0.5 },
-  { source: "topic:fomc-jun", target: "dealer:bofa", edgeType: "topic", weight: 0.5 },
-  { source: "topic:tariffs", target: "dealer:ms", edgeType: "topic", weight: 0.5 },
-  { source: "topic:tariffs", target: "dealer:bofa", edgeType: "topic", weight: 0.5 },
-  { source: "topic:oil", target: "dealer:gs", edgeType: "topic", weight: 0.5 },
-  { source: "topic:oil", target: "dealer:ms", edgeType: "topic", weight: 0.5 },
-  { source: "dealer:gs", target: "dealer:jpm", edgeType: "influence", weight: 0.7 },
-  { source: "dealer:ms", target: "dealer:bofa", edgeType: "influence", weight: 0.5 },
-  { source: "dealer:gs", target: "dealer:citi", edgeType: "influence", weight: 0.6 },
-  { source: "dealer:gs", target: "concern:inflation", edgeType: "concern", weight: 0.6 },
-  { source: "dealer:gs", target: "concern:wages", edgeType: "concern", weight: 0.5 },
-  { source: "dealer:jpm", target: "concern:wages", edgeType: "concern", weight: 0.7 },
-  { source: "dealer:ms", target: "concern:inflation", edgeType: "concern", weight: 0.5 },
-  { source: "dealer:ms", target: "concern:fci", edgeType: "concern", weight: 0.8 },
-  { source: "dealer:citi", target: "concern:fci", edgeType: "concern", weight: 0.4 },
-  { source: "dealer:bofa", target: "concern:inflation", edgeType: "concern", weight: 0.5 },
-  { source: "dealer:bofa", target: "concern:supply-chain", edgeType: "concern", weight: 0.6 },
-  { source: "dealer:ms", target: "concern:supply-chain", edgeType: "concern", weight: 0.5 },
-  { source: "topic:fomc-jun", target: "topic:tariffs", edgeType: "correlation", weight: 0.4 },
-  { source: "topic:tariffs", target: "topic:oil", edgeType: "correlation", weight: 0.3 },
-  { source: "crisis:china-stim", target: "topic:fomc-jun", edgeType: "crisis", weight: 1 },
-];
+// Inline label map since it won't be exported from the component module
+const OP_LABELS: Record<string, string> = {
+  shortest_path: "Shortest Path",
+  centrality: "Centrality",
+  filter_by_type: "Filter by Type",
+  filter_by_concern: "Filter by Concern",
+  highlight_node: "Highlight Node",
+  subgraph: "Subgraph",
+};
 
 function adaptApiNode(n: {
   nodeId: string;
@@ -187,16 +61,53 @@ function adaptApiEdge(e: {
   };
 }
 
-export default function KnowledgeGraphPage() {
-  const apiConfigured = !!process.env.NEXT_PUBLIC_API_URL;
-  const [nodes, setNodes] = useState<GraphNode[]>(apiConfigured ? [] : sampleNodes);
-  const [edges, setEdges] = useState<GraphEdge[]>(apiConfigured ? [] : sampleEdges);
-  const [loading, setLoading] = useState(apiConfigured);
-  const [error, setError] = useState<string | null>(null);
-  const [usingFallback, setUsingFallback] = useState(false);
+type NodeType = GraphNode["type"];
+const NODE_TYPE_LABELS: Record<NodeType, string> = {
+  dealer: "Dealers",
+  topic: "Topics",
+  concern: "Concerns",
+  crisis: "Crisis",
+};
+const ALL_NODE_TYPES: NodeType[] = ["dealer", "topic", "concern", "crisis"];
 
+export default function KnowledgeGraphPage() {
+  const [nodes, setNodes] = useState<GraphNode[]>([]);
+  const [edges, setEdges] = useState<GraphEdge[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Node type visibility filter (hidden = not shown)
+  const [hiddenTypes, setHiddenTypes] = useState<Set<NodeType>>(new Set());
+
+  // Active query from Jarrett
+  const [activeQuery, setActiveQuery] = useState<GraphQuerySpec | null>(null);
+  const [activeQueryText, setActiveQueryText] = useState<string | null>(null);
+
+  // Query history panel
+  const [showHistory, setShowHistory] = useState(false);
+  const [queryHistory, setQueryHistory] = useState<GraphQueryRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Derived: filtered nodes/edges based on hidden types
+  const visibleNodes = nodes.filter((n) => !hiddenTypes.has(n.type));
+  const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
+  const visibleEdges = edges.filter((e) => {
+    const s = typeof e.source === "string" ? e.source : (e.source as GraphNode).id;
+    const t = typeof e.target === "string" ? e.target : (e.target as GraphNode).id;
+    return visibleNodeIds.has(s) && visibleNodeIds.has(t);
+  });
+
+  function toggleType(type: NodeType) {
+    setHiddenTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  }
+
+  // Load graph data
   useEffect(() => {
-    if (!apiConfigured) return;
     let cancelled = false;
     (async () => {
       try {
@@ -208,14 +119,8 @@ export default function KnowledgeGraphPage() {
         const apiEdges = (result.edges || []).map(
           (e) => adaptApiEdge(e as Parameters<typeof adaptApiEdge>[0])
         );
-        if (apiNodes.length === 0) {
-          setNodes(sampleNodes);
-          setEdges(sampleEdges);
-          setUsingFallback(true);
-        } else {
-          setNodes(apiNodes);
-          setEdges(apiEdges);
-        }
+        setNodes(apiNodes);
+        setEdges(apiEdges);
       } catch (err) {
         if (cancelled) return;
         const msg =
@@ -225,29 +130,122 @@ export default function KnowledgeGraphPage() {
               ? err.message
               : "Failed to load graph";
         setError(msg);
-        setNodes(sampleNodes);
-        setEdges(sampleEdges);
-        setUsingFallback(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [apiConfigured]);
+  }, []);
+
+  // Listen for jarrett:graph events from the widget / chat page
+  useEffect(() => {
+    function handleGraphQuery(e: Event) {
+      const detail = (e as CustomEvent).detail as {
+        spec: GraphQuerySpec;
+        naturalLanguage: string;
+      };
+      if (!detail?.spec) return;
+      setActiveQuery(detail.spec);
+      setActiveQueryText(detail.naturalLanguage || detail.spec.explanation);
+
+      // Persist to history
+      api.graph
+        .saveQuery({
+          naturalLanguage: detail.naturalLanguage || detail.spec.explanation,
+          operation: detail.spec.operation,
+          params: detail.spec.params,
+          explanation: detail.spec.explanation,
+          resultSummary: detail.spec.resultSummary,
+        })
+        .catch(() => {/* best-effort */});
+    }
+
+    window.addEventListener("jarrett:graph", handleGraphQuery);
+    return () => window.removeEventListener("jarrett:graph", handleGraphQuery);
+  }, []);
+
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const records = await api.graph.listQueries();
+      setQueryHistory(records);
+    } catch {
+      // best-effort
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  function toggleHistory() {
+    setShowHistory((prev) => {
+      if (!prev) loadHistory();
+      return !prev;
+    });
+  }
+
+  function replayQuery(record: GraphQueryRecord) {
+    setActiveQuery({
+      operation: record.operation as GraphQuerySpec["operation"],
+      params: record.params,
+      explanation: record.explanation,
+      resultSummary: record.resultSummary,
+    });
+    setActiveQueryText(record.naturalLanguage);
+    setShowHistory(false);
+  }
+
+  async function deleteQuery(queryId: string) {
+    await api.graph.deleteQuery(queryId).catch(() => {});
+    setQueryHistory((prev) => prev.filter((r) => r.queryId !== queryId));
+  }
+
+  function clearQuery() {
+    setActiveQuery(null);
+    setActiveQueryText(null);
+  }
 
   return (
     <div className="flex h-[calc(100vh-7.5rem)] flex-col">
-      <div className="flex items-center justify-between border-b border-border px-6 py-3">
+      {/* Header bar */}
+      <div className="flex items-center justify-between border-b border-border px-6 py-3 gap-4 flex-wrap">
         <div>
           <h1 className="text-base font-semibold">Knowledge Graph</h1>
           <p className="text-xs text-muted-foreground font-mono">
-            {nodes.length} nodes, {edges.length} edges
-            {usingFallback && (
-              <span className="ml-2 text-warning">(sample data)</span>
-            )}
+            {visibleNodes.length}/{nodes.length} nodes · {visibleEdges.length}/{edges.length} edges
           </p>
         </div>
+
+        {/* Node type filter chips */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mr-1">Show</span>
+          {ALL_NODE_TYPES.map((type) => {
+            const hidden = hiddenTypes.has(type);
+            return (
+              <button
+                key={type}
+                onClick={() => toggleType(type)}
+                className={`rounded-full px-2.5 py-1 text-[10px] font-mono uppercase tracking-widest border transition-colors cursor-pointer ${
+                  hidden
+                    ? "border-border text-muted-foreground/40 bg-transparent"
+                    : "border-primary/40 text-primary bg-primary/10"
+                }`}
+              >
+                {NODE_TYPE_LABELS[type]}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex items-center gap-3">
+          {/* Query history button */}
+          <button
+            onClick={toggleHistory}
+            className="flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted transition-colors cursor-pointer"
+          >
+            <Clock className="h-3 w-3 text-muted-foreground" />
+            History
+          </button>
+
           <div className="flex items-center gap-1.5">
             {loading ? (
               <>
@@ -268,6 +266,32 @@ export default function KnowledgeGraphPage() {
           </div>
         </div>
       </div>
+
+      {/* Active query bar */}
+      {activeQuery && (
+        <motion.div
+          initial={{ y: -8, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="flex items-center gap-3 border-b border-primary/20 bg-primary/5 px-6 py-2"
+        >
+          <Network className="h-3.5 w-3.5 text-primary shrink-0" />
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-primary mr-2">
+              {OP_LABELS[activeQuery.operation] ?? activeQuery.operation}
+            </span>
+            <span className="text-xs text-muted-foreground truncate">
+              {activeQueryText || activeQuery.explanation}
+            </span>
+          </div>
+          <button
+            onClick={clearQuery}
+            className="flex h-6 w-6 items-center justify-center rounded hover:bg-muted cursor-pointer text-muted-foreground shrink-0"
+            aria-label="Clear query"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </motion.div>
+      )}
 
       <motion.div
         initial={{ opacity: 0 }}
@@ -300,14 +324,15 @@ export default function KnowledgeGraphPage() {
               href="/console/sounding/new"
               className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
-              Run a sounding
+              Run a simulation
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
         ) : (
-          <KnowledgeGraph nodes={nodes} edges={edges} />
+          <KnowledgeGraph nodes={visibleNodes} edges={visibleEdges} activeQuery={activeQuery} />
         )}
 
+        {/* Zoom controls */}
         <div className="absolute left-4 top-4 z-10 flex flex-col gap-2">
           <button
             className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card hover:bg-muted cursor-pointer"
@@ -328,8 +353,76 @@ export default function KnowledgeGraphPage() {
             <RotateCcw className="h-4 w-4" />
           </button>
         </div>
+
+        {/* History panel */}
+        {showHistory && (
+          <motion.div
+            initial={{ x: -280, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -280, opacity: 0 }}
+            className="absolute left-0 top-0 h-full w-72 border-r border-border bg-card shadow-xl z-20 flex flex-col"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+              <div className="flex items-center gap-2">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-sm font-semibold">Query History</span>
+              </div>
+              <button
+                onClick={() => setShowHistory(false)}
+                className="flex h-6 w-6 items-center justify-center rounded hover:bg-muted cursor-pointer text-muted-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {historyLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : queryHistory.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  No graph queries yet.
+                  <br />
+                  Ask Jarrett to analyse the graph.
+                </div>
+              ) : (
+                queryHistory.map((record) => (
+                  <div
+                    key={record.queryId}
+                    className="group rounded-lg border border-border p-3 space-y-1.5 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-primary">
+                        {OP_LABELS[record.operation] ?? record.operation}
+                      </span>
+                      <button
+                        onClick={() => deleteQuery(record.queryId)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity flex h-5 w-5 items-center justify-center rounded hover:bg-destructive/10 cursor-pointer text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <p className="text-xs leading-snug line-clamp-2">
+                      {record.naturalLanguage}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {new Date(record.createdAt).toLocaleString()}
+                    </p>
+                    <button
+                      onClick={() => replayQuery(record)}
+                      className="w-full rounded bg-primary/10 px-2 py-1 text-[10px] font-mono uppercase tracking-widest text-primary hover:bg-primary/20 transition-colors cursor-pointer"
+                    >
+                      Replay
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </motion.div>
+        )}
       </motion.div>
 
+      {/* Legend */}
       <div className="border-t border-border bg-card px-6 py-3 shrink-0">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
@@ -345,6 +438,11 @@ export default function KnowledgeGraphPage() {
           <LegendEdge color="var(--primary)" label="Influence" dashed={false} />
           <LegendEdge color="var(--muted-foreground)" label="Concern" dashed />
           <LegendEdge color="var(--warning)" label="Crisis" dashed={false} />
+          {activeQuery && (
+            <span className="ml-4 text-[10px] font-mono uppercase tracking-widest text-primary animate-pulse">
+              ● Query Active
+            </span>
+          )}
         </div>
       </div>
     </div>

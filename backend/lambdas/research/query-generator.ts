@@ -51,7 +51,7 @@ Example: ["query 1", "query 2", "query 3"]`;
     return [topic];
   }
 
-  return queries.slice(0, 3); // Ensure max 3 queries
+  return queries.slice(0, 2); // 2 parallel searches is enough and faster
 }
 
 function parseQueriesFromResponse(text: string): string[] {

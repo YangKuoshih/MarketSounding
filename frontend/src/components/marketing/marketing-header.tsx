@@ -2,18 +2,11 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
 import { Sun, Moon, ArrowRight } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { motion, AnimatePresence } from "motion/react";
 
-const navItems = [
-  { href: "/about", label: "About" },
-  { href: "/console", label: "Console" },
-];
-
 export function MarketingHeader() {
-  const pathname = usePathname();
   const { resolvedTheme, setTheme } = useTheme();
 
   return (
@@ -31,25 +24,6 @@ export function MarketingHeader() {
             <span className="text-foreground">Market</span><span className="text-primary">Buzz</span>
           </span>
         </Link>
-
-        <nav className="hidden md:flex items-center gap-1">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer ${
-                  isActive
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
 
         <div className="flex items-center gap-2">
           <button

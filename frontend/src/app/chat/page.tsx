@@ -18,6 +18,9 @@ import { useTheme } from "@/components/theme-provider";
 import { JarrettAvatar } from "@/components/jarrett-avatar";
 import { api, ApiError, type ChatMessage } from "@/lib/api-client";
 import { parseChartSpec, ChatChart } from "@/components/chat-chart";
+import { parseSimulationSpec, SimLaunchCard } from "@/components/chat-simulation";
+import { parseGraphQuerySpec } from "@/components/chat-graph-query";
+import { useRouter } from "next/navigation";
 
 interface Message {
   id: string;
@@ -28,6 +31,15 @@ interface Message {
 }
 
 const dealers = [
+  {
+    id: "jarrett",
+    short: "JAR",
+    name: "Jarrett (All Desks)",
+    bias: 0,
+    color: "var(--primary)",
+    intro:
+      "Jarrett here — your neutral market intelligence guide. Ask me about macro, rates, or say 'run a simulation on [topic]' to launch one directly from here.",
+  },
   {
     id: "gs",
     short: "GS",
@@ -75,12 +87,20 @@ const dealers = [
   },
 ];
 
-const suggestedPrompts = [
-  "What's your view on the next FOMC meeting?",
-  "How would tariffs impact your rate path forecast?",
-  "What's the biggest tail risk you're watching?",
-  "Where do you stand on QT timing?",
-];
+const suggestedPrompts: Record<string, string[]> = {
+  jarrett: [
+    "Run a simulation on FOMC June rate decision",
+    "Simulate US-China tariff escalation with 4 rounds",
+    "Launch a simulation on oil supply shock with crisis: OPEC emergency meeting",
+    "What's the consensus view across the 5 dealers on rates right now?",
+  ],
+  default: [
+    "What's your view on the next FOMC meeting?",
+    "How would tariffs impact your rate path forecast?",
+    "What's the biggest tail risk you're watching?",
+    "Where do you stand on QT timing?",
+  ],
+};
 
 export default function AgentChatPage() {
   return (
@@ -92,7 +112,8 @@ export default function AgentChatPage() {
 
 function AgentChatContent() {
   const searchParams = useSearchParams();
-  const [selectedAgent, setSelectedAgent] = useState(dealers[0]);
+  const router = useRouter();
+  const [selectedAgent, setSelectedAgent] = useState(dealers[0]); // defaults to Jarrett
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
@@ -172,14 +193,28 @@ function AgentChatContent() {
       apiMessages.push({ role: "user", content: text.trim() });
 
       const result = await api.chat.send(selectedAgent.id, apiMessages);
+
+      // Parse graph_query block if Jarrett returned one
+      const { prose: replyAfterGraph, graphQuery } = parseGraphQuerySpec(result.reply);
+      const displayReply = replyAfterGraph.trim() || result.reply;
+
       const agentMsg: Message = {
         id: `a-${Date.now()}`,
         role: "agent",
         agentId: selectedAgent.id,
-        content: result.reply,
+        content: displayReply,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, agentMsg]);
+
+      // Auto-navigate to graph page and fire the query event
+      if (graphQuery && selectedAgent.id === "jarrett") {
+        const detail = { spec: graphQuery, naturalLanguage: text.trim() };
+        router.push("/console/graph");
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("jarrett:graph", { detail }));
+        }, 800);
+      }
     } catch (err) {
       const errorMessage =
         err instanceof ApiError
@@ -290,51 +325,68 @@ function AgentChatContent() {
 
           <div className="px-3 pt-3 pb-1">
             <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground px-1">
-              Dealer Voices
+              Assistant
             </p>
           </div>
 
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {dealers.map((dealer) => {
+            {dealers.map((dealer, idx) => {
               const isActive = selectedAgent.id === dealer.id;
+              const isJarrett = dealer.id === "jarrett";
               return (
+                <div key={dealer.id}>
+                  {idx === 1 && (
+                    <div className="px-1 pt-3 pb-1">
+                      <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                        Dealer Voices
+                      </p>
+                    </div>
+                  )}
                 <button
-                  key={dealer.id}
                   onClick={() => selectAgent(dealer)}
                   className={`flex w-full items-center gap-3 rounded-md p-3 text-left cursor-pointer transition-colors ${
                     isActive ? "bg-muted" : "hover:bg-muted/50"
-                  }`}
+                  } ${isJarrett ? "border border-primary/20" : ""}`}
                 >
                   <div
                     className="flex h-9 w-9 items-center justify-center rounded-full border-2 shrink-0"
                     style={{ borderColor: dealer.color }}
                   >
-                    <span className="font-mono text-[10px] font-semibold">
-                      {dealer.short}
-                    </span>
+                    {isJarrett ? (
+                      <JarrettAvatar size={22} />
+                    ) : (
+                      <span className="font-mono text-[10px] font-semibold">
+                        {dealer.short}
+                      </span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-1">
                       <span className="text-sm font-medium truncate">
                         {dealer.name}
                       </span>
-                      <span
-                        className="font-mono text-[10px]"
-                        style={{ color: dealer.color }}
-                      >
-                        {dealer.bias > 0 ? "+" : ""}
-                        {dealer.bias.toFixed(1)}
-                      </span>
+                      {!isJarrett && (
+                        <span
+                          className="font-mono text-[10px] shrink-0"
+                          style={{ color: dealer.color }}
+                        >
+                          {dealer.bias > 0 ? "+" : ""}
+                          {dealer.bias.toFixed(1)}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">
-                      {dealer.bias > 0.2
-                        ? "Hawkish"
-                        : dealer.bias < -0.1
-                          ? "Dovish"
-                          : "Neutral"}
+                      {isJarrett
+                        ? "Neutral · Launch simulations"
+                        : dealer.bias > 0.2
+                          ? "Hawkish"
+                          : dealer.bias < -0.1
+                            ? "Dovish"
+                            : "Neutral"}
                     </p>
                   </div>
                 </button>
+                </div>
               );
             })}
           </div>
@@ -394,7 +446,7 @@ function AgentChatContent() {
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
             {!messages.some((m) => m.role === "user") ? (
-              <EmptyChat agent={selectedAgent} onSelect={(p) => send(p)} prompts={suggestedPrompts} />
+              <EmptyChat agent={selectedAgent} onSelect={(p) => send(p)} prompts={suggestedPrompts[selectedAgent.id] ?? suggestedPrompts.default} />
             ) : (
               <div className="mx-auto max-w-2xl space-y-6">
                 {messages.map((msg) => (
@@ -426,7 +478,11 @@ function AgentChatContent() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={`Ask Jarrett via ${selectedAgent.short} about markets, rates, risks...`}
+                placeholder={
+                  selectedAgent.id === "jarrett"
+                    ? `Ask Jarrett about markets, or say "run a simulation on [topic]"…`
+                    : `Ask Jarrett via ${selectedAgent.short} about markets, rates, risks...`
+                }
                 disabled={isThinking}
                 className="flex-1 rounded-md border border-input bg-background px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
               />
@@ -552,11 +608,14 @@ function MessageBubble({
           {isUser ? (
             <p className="whitespace-pre-wrap">{message.content}</p>
           ) : (() => {
-            const { prose, chart } = parseChartSpec(message.content);
+            // Parse simulate block first, then chart block from remaining prose
+            const { prose: proseAfterSim, sim } = parseSimulationSpec(message.content);
+            const { prose, chart } = parseChartSpec(proseAfterSim);
             return (
               <>
                 <p className="whitespace-pre-wrap">{prose}</p>
                 {chart && <ChatChart spec={chart} />}
+                {sim && <SimLaunchCard sim={sim} />}
               </>
             );
           })()}

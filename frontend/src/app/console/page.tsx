@@ -143,9 +143,14 @@ export default function ConsoleDashboardPage() {
             <ArrowRight className="h-4 w-4" />
           </button>
         </form>
-        <p className="mt-3 text-xs text-muted-foreground font-mono">
-          Powered by Claude Sonnet 4.6 · GS · JPM · MS · Citi · BofA
-        </p>
+        <div className="mt-3 flex items-center gap-3 text-xs font-mono text-muted-foreground">
+          <span>Powered by Claude Sonnet 4.6 · GS · JPM · MS · Citi · BofA</span>
+          <span className="text-border">|</span>
+          <span className="text-muted-foreground/60">Defaults: 3 rounds · no crisis injection</span>
+          <Link href="/console/sounding/new" className="text-primary hover:underline">
+            Customize →
+          </Link>
+        </div>
       </motion.div>
 
       {/* Sample event cards */}
@@ -157,6 +162,9 @@ export default function ConsoleDashboardPage() {
             </h2>
             <span className="text-xs font-mono text-muted-foreground/50">03 / 03</span>
           </div>
+          <span className="text-[10px] font-mono text-muted-foreground/50 hidden sm:block">
+            3 rounds · no crisis · quick launch
+          </span>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {sampleEvents.map((event, i) => {

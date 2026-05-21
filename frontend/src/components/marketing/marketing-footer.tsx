@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { AlertTriangle } from "lucide-react";
 
 export function MarketingFooter() {
@@ -8,13 +9,9 @@ export function MarketingFooter() {
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="flex h-7 w-7 items-center justify-center rounded bg-primary">
-                <span className="font-mono text-xs font-bold text-primary-foreground">
-                  MB
-                </span>
-              </div>
+              <Image src="/logo.png" alt="MarketBuzz" width={28} height={28} className="rounded" />
               <span className="font-mono text-sm font-semibold">
-                MarketBuzz
+                <span className="text-foreground">Market</span><span className="text-primary">Buzz</span>
               </span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">

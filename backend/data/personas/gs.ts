@@ -42,4 +42,21 @@ export const gsPersona: PersonaProfile = {
     'Model-driven language',
     'Rarely uses superlatives',
   ],
+  signaturePhrases: [
+    'our GS Financial Conditions Index',
+    'our Current Activity Indicator',
+    'conditional on [specific data milestone]',
+    'we assign [X]% probability to',
+    'the risk-reward favors',
+    'lagged effects of monetary policy',
+    'goods disinflation vs. services stickiness',
+  ],
+  mustAvoid: [
+    'our internal card data',       // BofA phrase
+    'the market is underpricing',   // MS phrase
+    'the print suggests',           // Citi phrase
+    'the labor market tells us',    // JPM phrase
+    'tail-risk framing',            // MS style
+    'vague non-quantitative claims',
+  ],
 };

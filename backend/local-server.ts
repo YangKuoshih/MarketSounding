@@ -16,7 +16,9 @@ process.env.JWT_SECRET_ARN = 'local';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import * as jwt from 'jsonwebtoken';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { resolve, dirname } from 'path';
 import { handler as researchHandler } from './lambdas/research/index';
 import { handler as chatHandler } from './lambdas/chat-agent/index';
 import { handler as dealerAgentHandler } from './lambdas/dealer-agent/index';
@@ -24,7 +26,13 @@ import type { DealerAgentInput, DealerAgentOutput } from './lambdas/dealer-agent
 import { loadPersona } from './data/personas';
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
-// ── Local types (mirrors frontend api-client.ts shapes) ───────────────────────
+// ── Local types ───────────────────────────────────────────────────────────────
+
+interface LocalUser {
+  userId: string;
+  username: string;
+  passwordHash: string;
+}
 
 interface ReactionData {
   personaId: string;
@@ -66,14 +74,69 @@ interface LocalSimulation {
   error: string | null;
 }
 
-// ── In-memory stores ──────────────────────────────────────────────────────────
+// ── Persistent stores ─────────────────────────────────────────────────────────
 
-const simStore = new Map<string, LocalSimulation>();
+const JWT_SECRET = process.env.JWT_SECRET ?? 'local-dev-secret-not-for-production';
+
+const DB_PATH = resolve(__dirname, '../data/local-db.json');
+mkdirSync(dirname(DB_PATH), { recursive: true });
+
+interface GraphQueryRecord {
+  queryId: string;
+  userId: string;
+  createdAt: string;
+  naturalLanguage: string;
+  operation: string;
+  params: Record<string, unknown>;
+  explanation: string;
+  resultSummary: string;
+}
+
+interface DbSchema {
+  users: Record<string, LocalUser>;
+  simulations: Record<string, LocalSimulation>;
+  graphNodes: Array<{ nodeId: string; nodeType: string; label: string; metadata: Record<string, unknown> }>;
+  graphEdges: Array<{ sourceNodeId: string; targetNodeId: string; edgeType: string; weight: number }>;
+  graphQueries: GraphQueryRecord[];
+}
+
+function loadDb(): DbSchema {
+  if (existsSync(DB_PATH)) {
+    try {
+      const parsed = JSON.parse(readFileSync(DB_PATH, 'utf8')) as DbSchema;
+      return { users: {}, simulations: {}, graphNodes: [], graphEdges: [], graphQueries: [], ...parsed };
+    } catch {
+      console.warn('Could not parse local-db.json — starting fresh');
+    }
+  }
+  return { users: {}, simulations: {}, graphNodes: [], graphEdges: [], graphQueries: [] };
+}
+
+function saveDb(): void {
+  const snapshot: DbSchema = {
+    users: Object.fromEntries(userStore),
+    simulations: Object.fromEntries(simStore),
+    graphNodes: localGraph.nodes,
+    graphEdges: localGraph.edges,
+    graphQueries: graphQueryStore,
+  };
+  writeFileSync(DB_PATH, JSON.stringify(snapshot, null, 2), 'utf8');
+}
+
+function hashPassword(password: string): string {
+  return createHash('sha256').update(password + JWT_SECRET).digest('hex');
+}
+
+const initialDb = loadDb();
+const userStore = new Map<string, LocalUser>(Object.entries(initialDb.users));
+const simStore = new Map<string, LocalSimulation>(Object.entries(initialDb.simulations));
+const graphQueryStore: GraphQueryRecord[] = initialDb.graphQueries ?? [];
+console.log(`Loaded ${userStore.size} user(s), ${simStore.size} simulation(s), ${graphQueryStore.length} graph queries from local-db.json`);
 
 const localGraph: {
   nodes: Array<{ nodeId: string; nodeType: string; label: string; metadata: Record<string, unknown> }>;
   edges: Array<{ sourceNodeId: string; targetNodeId: string; edgeType: string; weight: number }>;
-} = { nodes: [], edges: [] };
+} = { nodes: initialDb.graphNodes, edges: initialDb.graphEdges };
 
 // ── Express app ───────────────────────────────────────────────────────────────
 
@@ -81,11 +144,22 @@ const app = express();
 app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json({ limit: '2mb' }));
 
-const JWT_SECRET = process.env.JWT_SECRET ?? 'local-dev-secret-not-for-production';
-const DEMO_USER = { userId: 'local-user-1', username: 'demo' };
+function makeToken(userId: string, username: string): string {
+  return jwt.sign({ userId, username }, JWT_SECRET, { algorithm: 'HS256', expiresIn: '24h' });
+}
 
-function makeToken(): string {
-  return jwt.sign(DEMO_USER, JWT_SECRET, { algorithm: 'HS256', expiresIn: '24h' });
+function getAuthUser(req: Request): { userId: string; username: string } | null {
+  const auth = req.headers.authorization ?? '';
+  const token = auth.replace(/^Bearer\s+/i, '');
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as { userId: string; username: string };
+    // Reject tokens for users that don't exist in the store (e.g. stale demo tokens)
+    if (!userStore.has(payload.userId)) return null;
+    return payload;
+  } catch {
+    return null;
+  }
 }
 
 function generateId(): string {
@@ -122,12 +196,44 @@ function sendLambdaResult(res: Response, result: APIGatewayProxyResult): void {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-app.post('/auth/login', (_req: Request, res: Response) => {
-  res.json({ success: true, token: makeToken(), userId: DEMO_USER.userId });
+app.post('/auth/register', (req: Request, res: Response) => {
+  const { username, password } = (req.body ?? {}) as { username?: string; password?: string };
+  if (!username || !password) {
+    return void res.status(400).json({ error: 'Username and password are required' });
+  }
+  if (!/^[a-zA-Z0-9_]{3,50}$/.test(username)) {
+    return void res.status(400).json({ error: 'Username must be 3-50 chars, alphanumeric and underscore only' });
+  }
+  if (password.length < 8) {
+    return void res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+  const existing = [...userStore.values()].find(u => u.username === username);
+  if (existing) {
+    return void res.status(409).json({ error: 'Username already taken' });
+  }
+  const userId = randomUUID().replace(/-/g, '').slice(0, 12);
+  const user: LocalUser = { userId, username, passwordHash: hashPassword(password) };
+  userStore.set(userId, user);
+  saveDb();
+  res.status(201).json({ success: true, token: makeToken(userId, username), userId });
 });
 
-app.post('/auth/register', (_req: Request, res: Response) => {
-  res.status(201).json({ success: true, token: makeToken(), userId: DEMO_USER.userId });
+app.post('/auth/login', (req: Request, res: Response) => {
+  const { username, password } = (req.body ?? {}) as { username?: string; password?: string };
+  if (!username || !password) {
+    return void res.status(400).json({ error: 'Username and password are required' });
+  }
+  const user = [...userStore.values()].find(u => u.username === username);
+  if (!user || user.passwordHash !== hashPassword(password)) {
+    return void res.status(401).json({ error: 'Invalid credentials' });
+  }
+  res.json({ success: true, token: makeToken(user.userId, user.username), userId: user.userId });
+});
+
+app.get('/auth/me', (req: Request, res: Response) => {
+  const authUser = getAuthUser(req);
+  if (!authUser) return void res.status(401).json({ error: 'Unauthorized' });
+  res.json({ userId: authUser.userId, username: authUser.username });
 });
 
 // ── Research / events / personas ──────────────────────────────────────────────
@@ -165,8 +271,11 @@ app.get('/personas', async (req: Request, res: Response) => {
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
 app.post('/chat/:personaId', async (req: Request, res: Response) => {
+  const authUser = getAuthUser(req);
+  if (!authUser) return void res.status(401).json({ error: 'Unauthorized' });
+
   try {
-    const token = makeToken();
+    const token = makeToken(authUser.userId, authUser.username);
     const result = await (chatHandler as (e: APIGatewayProxyEvent) => Promise<APIGatewayProxyResult>)(
       lambdaEvent(req, {
         pathParameters: { personaId: req.params.personaId },
@@ -202,8 +311,12 @@ function computeConsensus(rounds: RoundData[]): number {
   return Math.max(0, Math.min(1, 1 - stddev / 0.8));
 }
 
-app.get('/simulations', (_req: Request, res: Response) => {
+app.get('/simulations', (req: Request, res: Response) => {
+  const authUser = getAuthUser(req);
+  if (!authUser) return void res.status(401).json({ error: 'Unauthorized' });
+
   const list = Array.from(simStore.values())
+    .filter((s) => s.userId === authUser.userId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .map((s) => ({
       simulationId: s.simulationId,
@@ -219,8 +332,11 @@ app.get('/simulations', (_req: Request, res: Response) => {
 });
 
 app.get('/simulations/:id', (req: Request, res: Response) => {
+  const authUser = getAuthUser(req);
+  if (!authUser) return void res.status(401).json({ error: 'Unauthorized' });
+
   const sim = simStore.get(req.params.id);
-  if (!sim) return void res.status(404).json({ error: 'Simulation not found' });
+  if (!sim || sim.userId !== authUser.userId) return void res.status(404).json({ error: 'Simulation not found' });
 
   res.json({
     simulationId: sim.simulationId,
@@ -253,13 +369,97 @@ app.post('/simulations/:id/crisis', (req: Request, res: Response) => {
 
 // ── Graph ─────────────────────────────────────────────────────────────────────
 
-app.get('/graph/subgraph', (_req: Request, res: Response) => {
-  res.json({ nodes: localGraph.nodes, edges: localGraph.edges });
+app.get('/graph/subgraph', (req: Request, res: Response) => {
+  const authUser = getAuthUser(req);
+  if (!authUser) return void res.status(401).json({ error: 'Unauthorized' });
+
+  // Filter graph to nodes/edges belonging to this user's simulations
+  const userSimIds = new Set(
+    [...simStore.values()]
+      .filter((s) => s.userId === authUser.userId)
+      .map((s) => s.simulationId)
+  );
+
+  const userNodes = localGraph.nodes.filter((n) => {
+    if (n.nodeType === 'topic') return userSimIds.has((n.metadata?.simulationId as string) ?? '');
+    if (n.nodeType === 'dealer') return true; // dealers are shared
+    // concern/crisis nodes: keep if any of their edges connect to this user's topics
+    return true;
+  });
+
+  const userNodeIds = new Set(userNodes.map((n) => n.nodeId));
+  const userEdges = localGraph.edges.filter(
+    (e) => userNodeIds.has(e.sourceNodeId) && userNodeIds.has(e.targetNodeId)
+  );
+
+  res.json({ nodes: userNodes, edges: userEdges });
+});
+
+// ── Graph queries ─────────────────────────────────────────────────────────────
+
+app.post('/graph/queries', (req: Request, res: Response) => {
+  const authUser = getAuthUser(req);
+  if (!authUser) return void res.status(401).json({ error: 'Unauthorized' });
+
+  const { naturalLanguage, operation, params, explanation, resultSummary } = (req.body ?? {}) as {
+    naturalLanguage?: string;
+    operation?: string;
+    params?: Record<string, unknown>;
+    explanation?: string;
+    resultSummary?: string;
+  };
+
+  if (!naturalLanguage || !operation) {
+    return void res.status(400).json({ error: 'naturalLanguage and operation are required' });
+  }
+
+  const record: GraphQueryRecord = {
+    queryId: generateId(),
+    userId: authUser.userId,
+    createdAt: new Date().toISOString(),
+    naturalLanguage,
+    operation,
+    params: params ?? {},
+    explanation: explanation ?? '',
+    resultSummary: resultSummary ?? '',
+  };
+
+  graphQueryStore.push(record);
+  saveDb();
+  res.status(201).json(record);
+});
+
+app.get('/graph/queries', (req: Request, res: Response) => {
+  const authUser = getAuthUser(req);
+  if (!authUser) return void res.status(401).json({ error: 'Unauthorized' });
+
+  const userQueries = graphQueryStore
+    .filter((q) => q.userId === authUser.userId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 50);
+
+  res.json({ queries: userQueries });
+});
+
+app.delete('/graph/queries/:queryId', (req: Request, res: Response) => {
+  const authUser = getAuthUser(req);
+  if (!authUser) return void res.status(401).json({ error: 'Unauthorized' });
+
+  const { queryId } = req.params;
+  const idx = graphQueryStore.findIndex((q) => q.queryId === queryId && q.userId === authUser.userId);
+  if (idx === -1) return void res.status(404).json({ error: 'Query not found' });
+
+  graphQueryStore.splice(idx, 1);
+  saveDb();
+  res.json({ deleted: true });
 });
 
 // ── Simulations (create + orchestrate) ───────────────────────────────────────
 
 app.post('/simulations', async (req: Request, res: Response) => {
+  const authUser = getAuthUser(req);
+  if (!authUser) return void res.status(401).json({ error: 'Unauthorized' });
+
   const { eventText, eventId, title, config } = (req.body ?? {}) as {
     eventText?: string;
     eventId?: string;
@@ -278,7 +478,7 @@ app.post('/simulations', async (req: Request, res: Response) => {
 
   const sim: LocalSimulation = {
     simulationId,
-    userId: DEMO_USER.userId,
+    userId: authUser.userId,
     title: title ?? 'Untitled Simulation',
     status: 'running',
     currentRound: 0,
@@ -296,12 +496,14 @@ app.post('/simulations', async (req: Request, res: Response) => {
   };
 
   simStore.set(simulationId, sim);
+  saveDb();
   res.status(202).json({ simulationId });
 
   runSimulation(sim).catch((err) => {
     console.error(`Simulation ${simulationId} failed:`, err);
     sim.status = 'failed';
     sim.error = err instanceof Error ? err.message : String(err);
+    saveDb();
   });
 });
 
@@ -356,17 +558,48 @@ function accumulateGraph(sim: LocalSimulation): void {
   for (const round of sim.rounds) {
     for (const reaction of round.reactions) {
       const dealerId = `dealer:${reaction.personaId}`;
-      if (!localGraph.nodes.find((n) => n.nodeId === dealerId)) {
-        localGraph.nodes.push({ nodeId: dealerId, nodeType: 'dealer', label: reaction.personaId, metadata: {} });
+      const persona = loadPersona(reaction.personaId);
+      const existingDealer = localGraph.nodes.find((n) => n.nodeId === dealerId);
+      if (!existingDealer) {
+        localGraph.nodes.push({
+          nodeId: dealerId,
+          nodeType: 'dealer',
+          label: persona.shortName,
+          metadata: {
+            hdScores: [reaction.hawkishDovishScore],
+            avgHawkishDovishScore: reaction.hawkishDovishScore,
+            simulationCount: 1,
+          },
+        });
+      } else {
+        const meta = existingDealer.metadata as { hdScores: number[]; avgHawkishDovishScore: number; simulationCount: number };
+        if (!meta.hdScores) meta.hdScores = [];
+        meta.hdScores.push(reaction.hawkishDovishScore);
+        meta.avgHawkishDovishScore = parseFloat((meta.hdScores.reduce((a, b) => a + b, 0) / meta.hdScores.length).toFixed(3));
+        meta.simulationCount = (meta.simulationCount ?? 0) + 1;
       }
       if (!localGraph.edges.find((e) => e.sourceNodeId === topicId && e.targetNodeId === dealerId)) {
         localGraph.edges.push({ sourceNodeId: topicId, targetNodeId: dealerId, edgeType: 'topic', weight: 1 });
       }
       for (const concern of reaction.keyConcerns ?? []) {
-        const normalized = concern.toLowerCase().trim().replace(/\s+/g, '-');
+        // Truncate concern to first 4 words max — they arrive as full sentences from the LLM
+        const shortLabel = concern.split(/\s+/).slice(0, 4).join(' ');
+        const normalized = shortLabel.toLowerCase().trim().replace(/\s+/g, '-');
         const concernId = `concern:${normalized}`;
-        if (!localGraph.nodes.find((n) => n.nodeId === concernId)) {
-          localGraph.nodes.push({ nodeId: concernId, nodeType: 'concern', label: concern, metadata: {} });
+        const existing = localGraph.nodes.find((n) => n.nodeId === concernId);
+        if (!existing) {
+          localGraph.nodes.push({
+            nodeId: concernId,
+            nodeType: 'concern',
+            label: shortLabel,
+            metadata: { frequency: 1, category: 'macro', dealerIds: [reaction.personaId] },
+          });
+        } else {
+          // Update frequency and dealerIds on each mention
+          const meta = existing.metadata as { frequency: number; category: string; dealerIds: string[] };
+          meta.frequency = (meta.frequency ?? 0) + 1;
+          if (!meta.dealerIds) meta.dealerIds = [];
+          if (!meta.dealerIds.includes(reaction.personaId)) meta.dealerIds.push(reaction.personaId);
         }
         if (!localGraph.edges.find((e) => e.sourceNodeId === dealerId && e.targetNodeId === concernId)) {
           localGraph.edges.push({ sourceNodeId: dealerId, targetNodeId: concernId, edgeType: 'concern', weight: 1 });
@@ -381,6 +614,21 @@ function accumulateGraph(sim: LocalSimulation): void {
     }
   }
 }
+
+// Rebuild graph from all completed simulations on startup
+(function rebuildGraphOnStartup() {
+  let rebuilt = 0;
+  for (const sim of simStore.values()) {
+    if (sim.status === 'complete') {
+      accumulateGraph(sim);
+      rebuilt++;
+    }
+  }
+  if (rebuilt > 0) {
+    saveDb();
+    console.log(`Startup graph rebuild: ${rebuilt} simulation(s) → ${localGraph.nodes.length} nodes, ${localGraph.edges.length} edges`);
+  }
+})();
 
 async function runSimulation(sim: LocalSimulation): Promise<void> {
   const eventContext = {
@@ -439,6 +687,7 @@ async function runSimulation(sim: LocalSimulation): Promise<void> {
   sim.status = 'complete';
   sim.completedAt = new Date().toISOString();
   accumulateGraph(sim);
+  saveDb();
   console.log(`[${sim.simulationId}] Simulation complete`);
 }
 
@@ -446,6 +695,6 @@ async function runSimulation(sim: LocalSimulation): Promise<void> {
 
 const PORT = 3001;
 app.listen(PORT, () => {
-  console.log(`MarketSounding local server running on http://localhost:${PORT}`);
+  console.log(`MarketBuzz local server running on http://localhost:${PORT}`);
   console.log(`IS_LOCAL=true | Bedrock via SSO | Tavily key: ${process.env.TAVILY_API_KEY ? 'set' : 'MISSING'}`);
 });

@@ -71,6 +71,9 @@ export const api = {
         { method: "POST", body: JSON.stringify({ username, password }) },
       );
     },
+    me() {
+      return request<{ userId: string; username: string }>("/auth/me");
+    },
   },
   events: {
     research(topic: string, maxSources?: number, recency?: string) {
@@ -112,6 +115,20 @@ export const api = {
       return request<{ nodes: GraphNode[]; edges: GraphEdge[] }>(
         `/graph/subgraph${qs ? `?${qs}` : ""}`,
       );
+    },
+    saveQuery(q: SaveGraphQueryParams) {
+      return request<GraphQueryRecord>("/graph/queries", {
+        method: "POST",
+        body: JSON.stringify(q),
+      });
+    },
+    listQueries() {
+      return request<{ queries: GraphQueryRecord[] }>("/graph/queries").then((r) => r.queries);
+    },
+    deleteQuery(queryId: string) {
+      return request<{ deleted: boolean }>(`/graph/queries/${queryId}`, {
+        method: "DELETE",
+      });
     },
   },
   personas: {
@@ -258,4 +275,23 @@ export interface Persona {
   name: string;
   shortName: string;
   bias: number;
+}
+
+export interface SaveGraphQueryParams {
+  naturalLanguage: string;
+  operation: string;
+  params: Record<string, unknown>;
+  explanation: string;
+  resultSummary: string;
+}
+
+export interface GraphQueryRecord {
+  queryId: string;
+  userId: string;
+  createdAt: string;
+  naturalLanguage: string;
+  operation: string;
+  params: Record<string, unknown>;
+  explanation: string;
+  resultSummary: string;
 }

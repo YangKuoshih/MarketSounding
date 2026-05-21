@@ -4,7 +4,8 @@ import { TavilyResult } from './tavily-client';
 import { Event, Source, ResearchResult } from './types';
 
 const bedrockClient = new BedrockRuntimeClient({});
-const SONNET_MODEL_ID = 'us.anthropic.claude-sonnet-4-6';
+const HAIKU_MODEL_ID = process.env.BEDROCK_HAIKU_MODEL_ID || 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
+const SONNET_MODEL_ID = process.env.BEDROCK_SONNET_MODEL_ID || 'us.anthropic.claude-sonnet-4-6';
 
 /**
  * Synthesize top search results into a structured Event brief using Sonnet 4.6.
@@ -37,7 +38,7 @@ Respond with ONLY the JSON object. No explanation or markdown formatting.`;
 
   const body = JSON.stringify({
     anthropic_version: 'bedrock-2023-05-31',
-    max_tokens: 2048,
+    max_tokens: 1024,
     messages: [
       {
         role: 'user',
@@ -46,16 +47,26 @@ Respond with ONLY the JSON object. No explanation or markdown formatting.`;
     ],
   });
 
-  const command = new InvokeModelCommand({
-    modelId: SONNET_MODEL_ID,
-    contentType: 'application/json',
-    accept: 'application/json',
-    body: Buffer.from(body),
-  });
+  // Try Haiku first; fall back to Sonnet if model unavailable or response fails to parse
+  let text = '';
+  for (const modelId of [HAIKU_MODEL_ID, SONNET_MODEL_ID]) {
+    try {
+      const command = new InvokeModelCommand({
+        modelId,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: Buffer.from(body),
+      });
+      const response = await bedrockClient.send(command);
+      const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+      text = responseBody.content?.[0]?.text ?? '';
+      if (text) break;
+    } catch (err) {
+      console.warn(`synthesizeEventBrief: model ${modelId} failed, trying next:`, err instanceof Error ? err.message : err);
+    }
+  }
 
-  const response = await bedrockClient.send(command);
-  const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-  const text = responseBody.content?.[0]?.text ?? '';
+  if (!text) throw new Error('All synthesis models failed to return a response');
 
   const synthesized = parseSynthesisResponse(text);
 
@@ -92,7 +103,7 @@ function formatSourcesForPrompt(results: TavilyResult[]): string {
   return results
     .map(
       (r, i) =>
-        `[${i + 1}] ${r.title} (${r.domain ?? 'unknown'}, ${r.published_date ?? 'unknown date'})\n${r.content}\n---`
+        `[${i + 1}] ${r.title} (${r.domain ?? 'unknown'}, ${r.published_date ?? 'unknown date'})\n${r.content.slice(0, 600)}\n---`
     )
     .join('\n');
 }

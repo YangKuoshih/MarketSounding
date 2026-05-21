@@ -146,9 +146,9 @@ export default function LandingPage() {
                 transition={{ duration: 0.5, delay: 0.05 }}
                 className="text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl"
               >
-                Simulate dealer reactions
+                <span className="text-muted-foreground">Simulate dealer reactions</span>
                 <br />
-                <span className="text-muted-foreground">before the market moves.</span>
+                before the market moves.
               </motion.h1>
 
               <motion.p
@@ -416,6 +416,13 @@ function DealerCardStack() {
           </span>
         </div>
 
+        {/* Legend */}
+        <div className="flex items-center justify-between mb-2 px-0">
+          <span className="text-[9px] font-mono uppercase tracking-widest" style={{ color: "var(--dovish)" }}>← Dovish</span>
+          <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground">0</span>
+          <span className="text-[9px] font-mono uppercase tracking-widest" style={{ color: "var(--hawkish)" }}>Hawkish →</span>
+        </div>
+
         <div className="space-y-2">
           {dealers.map((dealer, i) => (
             <motion.div
@@ -446,20 +453,26 @@ function DealerCardStack() {
                     {dealer.bias.toFixed(2)}
                   </span>
                 </div>
-                <div className="mt-1.5 h-1 rounded-full bg-muted overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{
-                      width: `${50 + dealer.bias * 50}%`,
-                    }}
-                    transition={{
-                      duration: 0.6,
-                      delay: 0.6 + i * 0.08,
-                      ease: "easeOut",
-                    }}
-                    className="h-full"
-                    style={{ background: dealer.color }}
-                  />
+                <div className="mt-1.5 relative">
+                  {/* Bar track */}
+                  <div className="h-1 rounded-full bg-muted overflow-hidden relative">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.abs(dealer.bias) * 50}%` }}
+                      transition={{
+                        duration: 0.6,
+                        delay: 0.6 + i * 0.08,
+                        ease: "easeOut",
+                      }}
+                      className="absolute inset-y-0 h-full"
+                      style={{
+                        background: dealer.color,
+                        ...(dealer.bias < 0 ? { right: "50%" } : { left: "50%" }),
+                      }}
+                    />
+                  </div>
+                  {/* Zero tick — sits on top, extends above and below the bar */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0.5 h-3 rounded-full bg-foreground/40" />
                 </div>
               </div>
             </motion.div>

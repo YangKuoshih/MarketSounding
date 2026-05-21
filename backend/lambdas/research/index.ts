@@ -120,15 +120,16 @@ async function handleResearch(event: APIGatewayProxyEvent): Promise<APIGatewayPr
 }
 
 async function executeTavilySearches(queries: string[], maxResults: number): Promise<TavilyResult[]> {
-  const results: TavilyResult[] = [];
+  const settled = await Promise.allSettled(
+    queries.map((q) => searchTavily(q, maxResults))
+  );
 
-  for (const query of queries) {
-    try {
-      const tavilyResults = await searchTavily(query, maxResults);
-      results.push(...tavilyResults);
-    } catch (error) {
-      console.warn(`Tavily search failed for query "${query}":`, error);
-      // Continue with other queries
+  const results: TavilyResult[] = [];
+  for (const outcome of settled) {
+    if (outcome.status === 'fulfilled') {
+      results.push(...outcome.value);
+    } else {
+      console.warn('Tavily search failed for a query:', outcome.reason);
     }
   }
 

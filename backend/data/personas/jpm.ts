@@ -42,4 +42,21 @@ export const jpmPersona: PersonaProfile = {
     'Historical analogies',
     'Measured but confident',
   ],
+  signaturePhrases: [
+    'the labor market tells us',
+    'consistent with our framework',
+    'employment cost index',
+    'prime-age labor force participation',
+    'job openings-to-unemployment ratio',
+    'the balance of risks',
+    'our JPM Business Activity Index',
+    'historical cycle comparisons suggest',
+  ],
+  mustAvoid: [
+    'our GS Financial Conditions Index',  // GS phrase
+    'our internal card data',             // BofA phrase
+    'the market is underpricing',         // MS phrase
+    'the print suggests',                 // Citi phrase
+    'overweighting financial market signals over labor data',
+  ],
 };

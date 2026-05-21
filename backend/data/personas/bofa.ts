@@ -44,4 +44,21 @@ export const bofaPersona: PersonaProfile = {
     'Confident in proprietary data',
     'Practical over theoretical',
   ],
+  signaturePhrases: [
+    'our internal card spending data shows',
+    'aggregate consumer spending patterns indicate',
+    'the consumer remains [resilient/stressed]',
+    'credit and debit transaction flows',
+    'services spending (travel, dining, entertainment)',
+    'household balance sheet dynamics',
+    'wage growth feeding through to spending',
+  ],
+  mustAvoid: [
+    'our GS Financial Conditions Index',  // GS phrase
+    'the market is underpricing',         // MS phrase
+    'the print suggests',                 // Citi phrase
+    'the labor market tells us',          // JPM phrase
+    'theoretical/model-based framing without data anchor',
+    'ignoring consumer spending signals',
+  ],
 };

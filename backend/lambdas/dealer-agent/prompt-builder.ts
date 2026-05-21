@@ -17,20 +17,20 @@ export interface PromptPayload {
   messages: BedrockMessage[];
 }
 
-const MAX_EVENT_TEXT_LENGTH = 12000;
+const MAX_EVENT_TEXT_LENGTH = 3000;
 
 const REACTION_SCHEMA_INSTRUCTION = `Produce a JSON response with these exact fields:
 {
-  "ratePathView": "your view on the rate path (1-2 sentences)",
-  "balanceSheetView": "your view on balance sheet policy (1-2 sentences)",
-  "riskAssetView": "your view on risk assets (1-2 sentences)",
-  "keyConcerns": ["1-3 key concerns as strings"],
+  "ratePathView": "your view on the rate path (1-2 sentences IN YOUR DESK'S DISTINCT VOICE — use your signature phrases)",
+  "balanceSheetView": "your view on balance sheet policy (1-2 sentences in your voice)",
+  "riskAssetView": "your view on risk assets (1-2 sentences in your voice)",
+  "keyConcerns": ["2-3 concerns SPECIFIC to your desk's framework — not generic macro observations"],
   "hawkishDovishScore": number between -1 (very dovish) and +1 (very hawkish),
   "confidence": number between 0 (no confidence) and 1 (very confident),
-  "reasoningMd": "2-3 paragraphs of reasoning in markdown, written in your persona's voice",
+  "reasoningMd": "2-3 paragraphs (5-7 sentences total) in markdown. MANDATORY: use at least 2 of your signature phrases, reference your proprietary data/models by name, make a reader immediately identify your desk without seeing the name.",
   "positionShift": number or null (change from your prior round H/D score, null for round 1),
   "influencedBy": ["persona IDs that influenced your view update"] or null,
-  "keyQuote": "one sentence explaining your shift reasoning or reason for holding firm"
+  "keyQuote": "one sentence ONLY your desk would say — must reference your specific data tool, model, or framework"
 }
 
 Respond with ONLY the JSON object. No markdown code blocks, no explanation outside the JSON.`;
@@ -69,6 +69,12 @@ ${persona.typicalConcerns.map((c) => `- ${c}`).join('\n')}
 
 KNOWN BLIND SPOTS (avoid these failure modes):
 ${persona.blindSpots.map((b) => `- ${b}`).join('\n')}
+
+VOICE ANCHORS — you MUST use at least 2 of these signature phrases in your response:
+${persona.signaturePhrases.map((p) => `- "${p}"`).join('\n')}
+
+VOICE BREAKS — never use these (they belong to other desks):
+${persona.mustAvoid.map((p) => `- "${p}"`).join('\n')}
 
 STRICT RULES:
 - Stay entirely within ${persona.name}'s documented analytical framework — no cross-contamination from other dealers' styles
@@ -126,6 +132,9 @@ YOUR PRIOR POSITION (Round ${input.roundNumber - 1}):
 - Key Concerns: ${priorReaction?.reaction.keyConcerns?.join(', ') ?? 'N/A'}
 - Reasoning: ${priorReaction?.reaction.reasoningMd ?? 'N/A'}
 
+VOICE ANCHORS — use at least 2 of these in your response:
+${persona.signaturePhrases.map((p) => `- "${p}"`).join('\n')}
+
 PEER UPDATE RULES:
 - Engage with peer views critically but in ${persona.name}'s voice — do not adopt another desk's framing
 - You may shift if a peer raises a data point or framework you genuinely find compelling; you may hold if you disagree
@@ -174,6 +183,9 @@ YOUR PRIOR POSITION:
 - Rate Path: ${priorReaction?.reaction.ratePathView ?? 'N/A'}
 - Key Concerns: ${priorReaction?.reaction.keyConcerns?.join(', ') ?? 'N/A'}
 
+VOICE ANCHORS — use at least 2 of these in your response:
+${persona.signaturePhrases.map((p) => `- "${p}"`).join('\n')}
+
 CRISIS RE-EVALUATION RULES:
 - Assess the crisis through ${persona.name}'s specific analytical lens — not a generic macro reaction
 - How does this crisis interact with ${persona.name}'s known blind spots or strengths?
@@ -215,17 +227,9 @@ function formatPeerReactions(peerReactions: PeerReaction[]): string {
 
   return peerReactions
     .map(
-      (peer) => `### ${peer.personaName} (${peer.personaId})
-- **H/D Score:** ${peer.hawkishDovishScore.toFixed(2)}
-- **Confidence:** ${peer.confidence.toFixed(2)}
-- **Rate Path:** ${peer.ratePathView}
-- **Balance Sheet:** ${peer.balanceSheetView}
-- **Risk Assets:** ${peer.riskAssetView}
-- **Key Concerns:** ${peer.keyConcerns.join('; ')}
-- **Reasoning:** ${peer.reasoningMd}
-${peer.keyQuote ? `- **Key Quote:** "${peer.keyQuote}"` : ''}`
+      (peer) => `${peer.personaName}: H/D ${peer.hawkishDovishScore.toFixed(2)} | ${peer.ratePathView} | Concerns: ${peer.keyConcerns.slice(0, 2).join('; ')}${peer.keyQuote ? ` | "${peer.keyQuote}"` : ''}`
     )
-    .join('\n\n');
+    .join('\n');
 }
 
 function truncateEventText(text: string): string {

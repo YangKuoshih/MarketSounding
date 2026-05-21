@@ -456,7 +456,7 @@ const server = http.createServer(async (req, res) => {
         config: s.config,
         currentRound: s.currentRound,
         totalRounds: s.totalRounds,
-        title: s.title,
+        eventTitle: s.title,
         createdAt: s.createdAt,
         completedAt: s.completedAt,
         error: s.error,

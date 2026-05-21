@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import * as d3 from "d3";
 import { motion, AnimatePresence } from "motion/react";
 import { useRouter } from "next/navigation";
 import { X, MessageSquare } from "lucide-react";
+import type { GraphQuerySpec } from "@/components/chat-graph-query";
 
 export interface GraphNode extends d3.SimulationNodeDatum {
   id: string;
@@ -23,6 +24,7 @@ export interface GraphEdge extends d3.SimulationLinkDatum<GraphNode> {
 interface KnowledgeGraphProps {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  activeQuery?: GraphQuerySpec | null;
 }
 
 const NODE_COLORS: Record<GraphNode["type"], string> = {
@@ -57,11 +59,278 @@ function nodeQuestion(node: GraphNode): string {
   return `Tell me about "${node.label}" in the context of macro markets.`;
 }
 
-export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
+// BFS shortest path between two node IDs; returns array of nodeIds on the path (inclusive) or null
+function bfsPath(
+  nodeId: string,
+  targetId: string,
+  nodes: GraphNode[],
+  edges: GraphEdge[]
+): string[] | null {
+  const nodeSet = new Set(nodes.map((n) => n.id));
+  if (!nodeSet.has(nodeId) || !nodeSet.has(targetId)) return null;
+
+  // Build adjacency list (undirected)
+  const adj = new Map<string, Set<string>>();
+  for (const n of nodes) adj.set(n.id, new Set());
+  for (const e of edges) {
+    const s = typeof e.source === "string" ? e.source : (e.source as GraphNode).id;
+    const t = typeof e.target === "string" ? e.target : (e.target as GraphNode).id;
+    adj.get(s)?.add(t);
+    adj.get(t)?.add(s);
+  }
+
+  const visited = new Map<string, string | null>(); // nodeId -> parent
+  visited.set(nodeId, null);
+  const queue = [nodeId];
+
+  while (queue.length > 0) {
+    const curr = queue.shift()!;
+    if (curr === targetId) {
+      // Reconstruct path
+      const path: string[] = [];
+      let c: string | null = curr;
+      while (c !== null) {
+        path.unshift(c);
+        c = visited.get(c) ?? null;
+      }
+      return path;
+    }
+    for (const neighbor of adj.get(curr) ?? []) {
+      if (!visited.has(neighbor)) {
+        visited.set(neighbor, curr);
+        queue.push(neighbor);
+      }
+    }
+  }
+  return null; // disconnected
+}
+
+// Degree centrality: returns map nodeId -> degree
+function degreeCentrality(nodes: GraphNode[], edges: GraphEdge[]): Map<string, number> {
+  const deg = new Map<string, number>();
+  for (const n of nodes) deg.set(n.id, 0);
+  for (const e of edges) {
+    const s = typeof e.source === "string" ? e.source : (e.source as GraphNode).id;
+    const t = typeof e.target === "string" ? e.target : (e.target as GraphNode).id;
+    deg.set(s, (deg.get(s) ?? 0) + 1);
+    deg.set(t, (deg.get(t) ?? 0) + 1);
+  }
+  return deg;
+}
+
+// Compute highlighted nodes and edges from a GraphQuerySpec
+function computeHighlights(
+  query: GraphQuerySpec,
+  nodes: GraphNode[],
+  edges: GraphEdge[]
+): { highlightedNodes: Set<string>; highlightedEdges: Set<string>; dimAll: boolean } {
+  const highlightedNodes = new Set<string>();
+  const highlightedEdges = new Set<string>();
+  let dimAll = false;
+
+  const edgeKey = (e: GraphEdge) => {
+    const s = typeof e.source === "string" ? e.source : (e.source as GraphNode).id;
+    const t = typeof e.target === "string" ? e.target : (e.target as GraphNode).id;
+    return `${s}::${t}`;
+  };
+
+  switch (query.operation) {
+    case "shortest_path": {
+      const src = query.params.source as string;
+      const tgt = query.params.target as string;
+      const path = bfsPath(src, tgt, nodes, edges);
+      if (path) {
+        path.forEach((id) => highlightedNodes.add(id));
+        for (let i = 0; i < path.length - 1; i++) {
+          const a = path[i];
+          const b = path[i + 1];
+          for (const e of edges) {
+            const s = typeof e.source === "string" ? e.source : (e.source as GraphNode).id;
+            const t = typeof e.target === "string" ? e.target : (e.target as GraphNode).id;
+            if ((s === a && t === b) || (s === b && t === a)) {
+              highlightedEdges.add(edgeKey(e));
+            }
+          }
+        }
+        dimAll = true;
+      }
+      break;
+    }
+
+    case "centrality": {
+      const metric = (query.params.metric as string) || "degree";
+      const topN = (query.params.topN as number) || 5;
+      const deg = degreeCentrality(nodes, edges);
+      const sorted = [...deg.entries()].sort((a, b) => b[1] - a[1]);
+      const top = sorted.slice(0, topN).map(([id]) => id);
+      top.forEach((id) => highlightedNodes.add(id));
+      // highlight edges between top nodes
+      for (const e of edges) {
+        const s = typeof e.source === "string" ? e.source : (e.source as GraphNode).id;
+        const t = typeof e.target === "string" ? e.target : (e.target as GraphNode).id;
+        if (highlightedNodes.has(s) && highlightedNodes.has(t)) {
+          highlightedEdges.add(edgeKey(e));
+        }
+      }
+      dimAll = true;
+      break;
+    }
+
+    case "filter_by_type": {
+      const types = (query.params.nodeTypes as string[]) || [];
+      for (const n of nodes) {
+        if (types.includes(n.type)) highlightedNodes.add(n.id);
+      }
+      for (const e of edges) {
+        const s = typeof e.source === "string" ? e.source : (e.source as GraphNode).id;
+        const t = typeof e.target === "string" ? e.target : (e.target as GraphNode).id;
+        if (highlightedNodes.has(s) && highlightedNodes.has(t)) {
+          highlightedEdges.add(edgeKey(e));
+        }
+      }
+      dimAll = true;
+      break;
+    }
+
+    case "filter_by_concern": {
+      const kw = ((query.params.concern as string) || "").toLowerCase();
+      const matchingConcerns = new Set<string>();
+      for (const n of nodes) {
+        if (n.type === "concern" && n.label.toLowerCase().includes(kw)) {
+          matchingConcerns.add(n.id);
+          highlightedNodes.add(n.id);
+        }
+      }
+      // Also highlight nodes connected to matching concerns
+      for (const e of edges) {
+        const s = typeof e.source === "string" ? e.source : (e.source as GraphNode).id;
+        const t = typeof e.target === "string" ? e.target : (e.target as GraphNode).id;
+        if (matchingConcerns.has(s) || matchingConcerns.has(t)) {
+          highlightedNodes.add(s);
+          highlightedNodes.add(t);
+          highlightedEdges.add(edgeKey(e));
+        }
+      }
+      dimAll = true;
+      break;
+    }
+
+    case "highlight_node": {
+      const nodeId = query.params.nodeId as string;
+      highlightedNodes.add(nodeId);
+      for (const e of edges) {
+        const s = typeof e.source === "string" ? e.source : (e.source as GraphNode).id;
+        const t = typeof e.target === "string" ? e.target : (e.target as GraphNode).id;
+        if (s === nodeId || t === nodeId) {
+          highlightedNodes.add(s === nodeId ? t : s);
+          highlightedEdges.add(edgeKey(e));
+        }
+      }
+      dimAll = true;
+      break;
+    }
+
+    case "subgraph": {
+      const ids = (query.params.nodeIds as string[]) || [];
+      const idSet = new Set(ids);
+      ids.forEach((id) => highlightedNodes.add(id));
+      for (const e of edges) {
+        const s = typeof e.source === "string" ? e.source : (e.source as GraphNode).id;
+        const t = typeof e.target === "string" ? e.target : (e.target as GraphNode).id;
+        if (idSet.has(s) && idSet.has(t)) {
+          highlightedEdges.add(edgeKey(e));
+        }
+      }
+      dimAll = true;
+      break;
+    }
+  }
+
+  return { highlightedNodes, highlightedEdges, dimAll };
+}
+
+export function KnowledgeGraph({ nodes, edges, activeQuery }: KnowledgeGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const router = useRouter();
+
+  const applyHighlights = useCallback(() => {
+    if (!svgRef.current) return;
+    const svg = d3.select(svgRef.current);
+
+    if (!activeQuery) {
+      // Reset all highlights
+      svg.selectAll<SVGLineElement, GraphEdge>("line")
+        .attr("stroke-opacity", 0.5)
+        .attr("stroke-width", (d) => Math.max(1, d.weight * 3));
+      svg.selectAll<SVGGElement, GraphNode>(".node")
+        .style("opacity", 1)
+        .each(function () {
+          const g = d3.select<SVGGElement, GraphNode>(this);
+          g.selectAll<SVGElement, unknown>("circle, rect, polygon")
+            .attr("filter", null)
+            .attr("stroke-width", "1.5");
+          g.selectAll<SVGCircleElement, unknown>("circle").attr("stroke-width", "2.5");
+        });
+      return;
+    }
+
+    const { highlightedNodes, highlightedEdges, dimAll } = computeHighlights(
+      activeQuery,
+      nodes,
+      edges
+    );
+
+    const edgeKey = (e: GraphEdge) => {
+      const s = typeof e.source === "string" ? e.source : (e.source as GraphNode).id;
+      const t = typeof e.target === "string" ? e.target : (e.target as GraphNode).id;
+      return `${s}::${t}`;
+    };
+
+    svg
+      .selectAll<SVGLineElement, GraphEdge>("line")
+      .attr("stroke-opacity", (d) => {
+        if (!dimAll) return 0.5;
+        return highlightedEdges.has(edgeKey(d)) ? 0.9 : 0.05;
+      })
+      .attr("stroke-width", (d) => {
+        if (highlightedEdges.has(edgeKey(d))) return Math.max(2, d.weight * 4);
+        return Math.max(1, d.weight * 3);
+      });
+
+    svg
+      .selectAll<SVGGElement, GraphNode>(".node")
+      .style("opacity", (d) => {
+        if (!dimAll) return 1;
+        return highlightedNodes.has(d.id) ? 1 : 0.15;
+      });
+
+    // Add glow filter to highlighted nodes
+    svg
+      .selectAll<SVGGElement, GraphNode>(".node")
+      .each(function (d) {
+        const g = d3.select<SVGGElement, GraphNode>(this);
+        const isHighlighted = highlightedNodes.has(d.id);
+        g.selectAll<SVGElement, unknown>("circle, rect, polygon").attr(
+          "filter",
+          isHighlighted ? "url(#glow)" : null
+        );
+        if (isHighlighted) {
+          g.selectAll<SVGCircleElement, unknown>("circle").attr("stroke-width", "3.5");
+          g.selectAll<SVGRectElement, unknown>("rect").attr("stroke-width", "2.5");
+          g.selectAll<SVGPolygonElement, unknown>("polygon").attr("stroke-width", "2.5");
+        } else {
+          g.selectAll<SVGCircleElement, unknown>("circle").attr("stroke-width", "2.5");
+          g.selectAll<SVGRectElement, unknown>("rect, polygon").attr("stroke-width", "1.5");
+        }
+      });
+  }, [activeQuery, nodes, edges]);
+
+  // Re-apply highlights whenever activeQuery changes (without re-running simulation)
+  useEffect(() => {
+    applyHighlights();
+  }, [applyHighlights]);
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
@@ -75,8 +344,9 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
 
     svg.attr("viewBox", `0 0 ${width} ${height}`);
 
-    // Defs for arrow markers
     const defs = svg.append("defs");
+
+    // Arrow marker
     defs
       .append("marker")
       .attr("id", "arrow")
@@ -90,10 +360,15 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
       .attr("d", "M0,-5L10,0L0,5")
       .attr("fill", "currentColor");
 
-    // Zoom container
+    // Glow filter for highlighted nodes
+    const filter = defs.append("filter").attr("id", "glow").attr("x", "-50%").attr("y", "-50%").attr("width", "200%").attr("height", "200%");
+    filter.append("feGaussianBlur").attr("stdDeviation", "3").attr("result", "coloredBlur");
+    const feMerge = filter.append("feMerge");
+    feMerge.append("feMergeNode").attr("in", "coloredBlur");
+    feMerge.append("feMergeNode").attr("in", "SourceGraphic");
+
     const root = svg.append("g").attr("class", "graph-root");
 
-    // Edge styles
     const edgeStrokes: Record<GraphEdge["edgeType"], string> = {
       influence: "var(--primary)",
       concern: "var(--muted-foreground)",
@@ -110,7 +385,6 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
       crisis: "0",
     };
 
-    // Force simulation
     const simulation = d3
       .forceSimulation<GraphNode>(nodes)
       .force(
@@ -130,7 +404,6 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
           .radius((d) => NODE_SIZES[d.type] + 8),
       );
 
-    // Edges
     const link = root
       .append("g")
       .attr("class", "edges")
@@ -146,7 +419,6 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
         d.edgeType === "influence" ? "url(#arrow)" : null,
       );
 
-    // Nodes
     const nodeGroup = root
       .append("g")
       .attr("class", "nodes")
@@ -178,22 +450,21 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
           }),
       );
 
-    // Render nodes by type
     nodeGroup.each(function (d) {
       const g = d3.select(this);
       const size = NODE_SIZES[d.type];
       const color = NODE_COLORS[d.type];
 
       if (d.type === "dealer") {
-        // Circle for dealer
         g.append("circle")
           .attr("r", size)
           .attr("fill", "var(--card)")
           .attr("stroke", color)
           .attr("stroke-width", 2.5);
       } else if (d.type === "topic") {
-        // Rounded rect for topic
-        const w = Math.max(60, d.label.length * 6.5);
+        const maxCharsForSize = 22;
+        const displayLen = Math.min(d.label.length, maxCharsForSize);
+        const w = Math.max(60, displayLen * 6.5);
         const h = 28;
         g.append("rect")
           .attr("x", -w / 2)
@@ -205,7 +476,6 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
           .attr("stroke", color)
           .attr("stroke-width", 1.5);
       } else if (d.type === "concern") {
-        // Diamond for concern
         const points = `0,${-size} ${size},0 0,${size} ${-size},0`;
         g.append("polygon")
           .attr("points", points)
@@ -213,7 +483,6 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
           .attr("stroke", color)
           .attr("stroke-width", 1.5);
       } else if (d.type === "crisis") {
-        // Triangle for crisis
         const points = `0,${-size} ${size},${size * 0.7} ${-size},${size * 0.7}`;
         g.append("polygon")
           .attr("points", points)
@@ -223,7 +492,8 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
           .attr("stroke-width", 1.5);
       }
 
-      // Label
+      const maxChars = d.type === "dealer" ? 6 : d.type === "topic" ? 22 : 14;
+      const labelText = d.label.length > maxChars ? d.label.slice(0, maxChars - 1) + "…" : d.label;
       g.append("text")
         .attr("text-anchor", "middle")
         .attr("dy", "0.35em")
@@ -232,10 +502,9 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
         .attr("font-family", "var(--font-fira-code)")
         .attr("fill", "var(--foreground)")
         .style("pointer-events", "none")
-        .text(d.label);
+        .text(labelText);
     });
 
-    // Tick handler
     simulation.on("tick", () => {
       link
         .attr("x1", (d) => (d.source as GraphNode).x ?? 0)
@@ -246,7 +515,9 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
       nodeGroup.attr("transform", (d) => `translate(${d.x ?? 0},${d.y ?? 0})`);
     });
 
-    // Zoom behavior
+    // Apply initial highlights after simulation starts
+    simulation.on("end", applyHighlights);
+
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.3, 3])
@@ -256,11 +527,10 @@ export function KnowledgeGraph({ nodes, edges }: KnowledgeGraphProps) {
 
     svg.call(zoom);
 
-    // Cleanup
     return () => {
       simulation.stop();
     };
-  }, [nodes, edges]);
+  }, [nodes, edges, applyHighlights]);
 
   return (
     <div ref={containerRef} className="relative h-full w-full">

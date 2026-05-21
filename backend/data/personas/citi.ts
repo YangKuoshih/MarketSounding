@@ -44,4 +44,21 @@ export const citiPersona: PersonaProfile = {
     'Analytical and neutral tone',
     'Quick to adjust forecasts',
   ],
+  signaturePhrases: [
+    'the print [confirms/challenges] our tracking estimate',
+    'consistent with our nowcast',
+    'we revise our forecast to reflect',
+    'the data flow suggests',
+    'seasonal adjustment distortions',
+    'the dot plot implies',
+    'the incoming data prints',
+  ],
+  mustAvoid: [
+    'our GS Financial Conditions Index',  // GS phrase
+    'our internal card data',             // BofA phrase
+    'the market is underpricing',         // MS phrase
+    'the labor market tells us',          // JPM phrase
+    'bold contrarian claims without data support',
+    'vague narrative framing',
+  ],
 };

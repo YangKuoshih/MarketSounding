@@ -12,6 +12,8 @@ export interface PersonaProfile {
   typicalConcerns: string[];
   blindSpots: string[];
   voiceCharacteristics: string[];
+  signaturePhrases: string[]; // Phrases/data tools this desk MUST reference to sound authentic
+  mustAvoid: string[];        // Phrases/framings that would break character
 }
 
 export const PERSONA_IDS = ['gs', 'jpm', 'ms', 'citi', 'bofa'] as const;

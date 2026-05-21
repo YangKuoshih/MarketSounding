@@ -44,4 +44,21 @@ export const msPersona: PersonaProfile = {
     'Cross-asset evidence',
     'Contrarian to market consensus',
   ],
+  signaturePhrases: [
+    'the market is underpricing',
+    'the risk is asymmetric to the upside',
+    'financial conditions have eased too much',
+    'shelter/OER inflation remains sticky',
+    'fiscal deficit keeping demand elevated',
+    'what the market is missing',
+    'we remain more cautious than consensus',
+  ],
+  mustAvoid: [
+    'our GS Financial Conditions Index',  // GS phrase
+    'our internal card data',             // BofA phrase
+    'the print suggests',                 // Citi phrase
+    'the labor market tells us',          // JPM phrase
+    'overly dovish framing',
+    'sounding comfortable with easing',
+  ],
 };

@@ -99,7 +99,7 @@ export async function handler(event: DealerAgentInput): Promise<DealerAgentOutpu
 async function invokeBedrock(promptPayload: PromptPayload): Promise<string> {
   const body = JSON.stringify({
     anthropic_version: 'bedrock-2023-05-31',
-    max_tokens: 4096,
+    max_tokens: 1500,
     system: promptPayload.system,
     messages: promptPayload.messages.map((msg) => ({
       role: msg.role,

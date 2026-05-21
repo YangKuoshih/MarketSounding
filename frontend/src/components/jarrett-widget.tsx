@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Send, Zap, Minimize2, MessageSquare } from "lucide-react";
 import { JarrettAvatar } from "./jarrett-avatar";
 import { api, type ChatMessage } from "@/lib/api-client";
+import { parseGraphQuerySpec } from "@/components/chat-graph-query";
 
 interface Message {
   id: string;
@@ -24,9 +25,9 @@ function getPageContext(pathname: string): { label: string; context: string; int
   }
   if (pathname.startsWith("/console/sounding/new")) {
     return {
-      label: "New Sounding",
-      context: "The user is creating a new sounding. They need to enter a market topic or event for the 5 dealer agents to debate.",
-      intro: "You're setting up a new sounding. Try topics like 'FOMC rate decision', 'China tariff escalation', or 'oil supply shock'. The more specific, the richer the debate. What's on your mind?",
+      label: "New Simulation",
+      context: "The user is on the New Simulation page and can configure a simulation (rounds 3-5, optional crisis injection) and enter a market topic. You can help them pick a topic and configuration, then launch a simulation automatically by outputting a simulate block. When the user tells you what they want to simulate, confirm and output the simulate block immediately — don't ask follow-up questions unless the topic is unclear.",
+      intro: "I'm Jarrett. Tell me what you want to simulate — a topic, how many rounds (default 3), and optionally a crisis event — and I'll launch it for you automatically. What's the topic?",
     };
   }
   if (pathname.startsWith("/console/sounding/")) {
@@ -39,8 +40,8 @@ function getPageContext(pathname: string): { label: string; context: string; int
   if (pathname.startsWith("/console/graph")) {
     return {
       label: "Knowledge Graph",
-      context: "The user is viewing the Knowledge Graph — a force-directed graph showing dealer nodes, topic nodes, concern nodes, and crisis nodes, connected by influence, topic participation, concern, correlation, and crisis edges.",
-      intro: "You're on the **Knowledge Graph**. I can explain what the nodes and edges mean, identify which dealers cluster around topics, or highlight influence patterns. What do you want to explore?",
+      context: "The user is viewing the Knowledge Graph — a force-directed graph showing dealer nodes, topic nodes, concern nodes, and crisis nodes. You can perform graph analysis by outputting a graph_query block (operations: shortest_path, centrality, filter_by_type, filter_by_concern, highlight_node, subgraph). When the user asks to explore or analyse the graph, immediately output the relevant graph_query block.",
+      intro: "You're on the **Knowledge Graph**. Ask me to highlight paths, find central nodes, or filter by type — I'll apply the analysis directly to the graph. What do you want to explore?",
     };
   }
   if (pathname.startsWith("/console/history")) {
@@ -85,6 +86,7 @@ function renderContent(text: string) {
 
 export function JarrettWidget() {
   const pathname = usePathname();
+  const router = useRouter();
 
   // Hide on auth pages and the dedicated /chat page
   const hidden =
@@ -161,10 +163,60 @@ export function JarrettWidget() {
       ];
 
       const result = await api.chat.send("jarrett", apiMessages);
+
+      // Parse simulate block from reply
+      const simMatch = result.reply.match(/```simulate\s*([\s\S]*?)```/);
+      // Parse graph_query block from reply
+      const { prose: replyAfterGraph, graphQuery } = parseGraphQuerySpec(
+        result.reply.replace(/```simulate[\s\S]*?```/, "")
+      );
+      const displayReply = replyAfterGraph.trim() || result.reply;
+
       setMessages((prev) => [
         ...prev,
-        { id: `j-${Date.now()}`, role: "jarrett", content: result.reply },
+        { id: `j-${Date.now()}`, role: "jarrett", content: displayReply },
       ]);
+
+      // Handle simulate block — fill new simulation form and auto-launch
+      if (simMatch && pathname.startsWith("/console/sounding/new")) {
+        try {
+          const spec = JSON.parse(simMatch[1].trim());
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `j-launch-${Date.now()}`,
+              role: "jarrett",
+              content: `**Launching now** — filling in the form and starting research + simulation automatically.`,
+            },
+          ]);
+          window.dispatchEvent(new CustomEvent("jarrett:simulate", { detail: spec }));
+        } catch {
+          // malformed block — ignore
+        }
+      }
+
+      // Handle graph_query block — navigate to graph page and apply query
+      if (graphQuery) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `j-graph-${Date.now()}`,
+            role: "jarrett",
+            content: `**Navigating to Knowledge Graph** — applying ${graphQuery.operation.replace(/_/g, " ")} analysis now.`,
+          },
+        ]);
+        const detail = { spec: graphQuery, naturalLanguage: text };
+        // Fire the event. If already on graph page it will be received immediately;
+        // if not, navigate first then fire after a short delay for the page to mount.
+        if (pathname.startsWith("/console/graph")) {
+          window.dispatchEvent(new CustomEvent("jarrett:graph", { detail }));
+        } else {
+          router.push("/console/graph");
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent("jarrett:graph", { detail }));
+          }, 800);
+        }
+      }
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -376,11 +428,14 @@ function getSuggestedPrompts(pathname: string): string[] {
   if (pathname === "/console") {
     return ["How does a simulation work?", "What dealers are included?", "Show me a sample topic"];
   }
+  if (pathname.startsWith("/console/sounding/new")) {
+    return ["Simulate FOMC rate cut", "Run oil supply shock, 4 rounds", "China tariffs with crisis injection"];
+  }
   if (pathname.startsWith("/console/sounding/") && !pathname.includes("new")) {
     return ["Explain the H/D spectrum", "Why did dealers shift?", "Who is the anchor dealer?"];
   }
   if (pathname.startsWith("/console/graph")) {
-    return ["Explain the influence edges", "Which dealers share concerns?", "What does consensus score mean?"];
+    return ["Show shortest path from GS to MS", "Highlight the most central nodes", "Filter graph to show only dealers"];
   }
   if (pathname.startsWith("/console/history")) {
     return ["What is a consensus score?", "How do I re-run a simulation?"];
