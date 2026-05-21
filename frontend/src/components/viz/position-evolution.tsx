@@ -42,6 +42,14 @@ export function PositionEvolution({ trajectories }: PositionEvolutionProps) {
 
     const maxRound = d3.max(trajectories.flatMap((t) => t.scores.map((s) => s.round))) || 3;
 
+    const allScores = trajectories.flatMap((t) => t.scores.map((s) => s.score));
+    const minScore = d3.min(allScores) ?? -1;
+    const maxScore = d3.max(allScores) ?? 1;
+    // Pad by 0.15 on each side so lines don't hug the edges, but keep within [-1, 1]
+    const yPad = Math.max(0.15, (maxScore - minScore) * 0.2);
+    const yMin = Math.max(-1, minScore - yPad);
+    const yMax = Math.min(1, maxScore + yPad);
+
     const xScale = d3
       .scaleLinear()
       .domain([1, maxRound])
@@ -49,15 +57,16 @@ export function PositionEvolution({ trajectories }: PositionEvolutionProps) {
 
     const yScale = d3
       .scaleLinear()
-      .domain([-1, 1])
+      .domain([yMin, yMax])
       .range([height - margin.bottom, margin.top]);
 
-    // Grid lines
+    // Grid lines — use dynamic ticks matching the y axis
+    const gridTicks = yScale.ticks(5).filter((v) => v !== 0);
     svg
       .append("g")
       .attr("class", "grid")
       .selectAll("line")
-      .data([-0.5, 0, 0.5])
+      .data(gridTicks)
       .enter()
       .append("line")
       .attr("x1", margin.left)

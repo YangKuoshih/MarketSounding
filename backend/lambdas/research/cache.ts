@@ -4,15 +4,19 @@ import { ResearchResult } from './types';
 
 const EVENTS_TABLE_NAME = process.env.EVENTS_TABLE_NAME ?? 'events';
 const CACHE_TTL_HOURS = 6; // Cache research results for 6 hours
+const IS_LOCAL = process.env.IS_LOCAL === 'true';
 
 /**
  * Check if a recent research result exists for this topic + recency combination.
  * Uses a normalized cache key stored in the events table.
+ * Skipped in local dev (no DynamoDB table available).
  */
 export async function getCachedResearch(
   topic: string,
   recency: string
 ): Promise<ResearchResult | null> {
+  if (IS_LOCAL) return null;
+
   const cacheKey = buildCacheKey(topic, recency);
 
   try {
@@ -45,12 +49,15 @@ export async function getCachedResearch(
 
 /**
  * Store a research result in the cache for future lookups.
+ * Skipped in local dev (no DynamoDB table available).
  */
 export async function cacheResearch(
   topic: string,
   recency: string,
   result: ResearchResult
 ): Promise<void> {
+  if (IS_LOCAL) return;
+
   const cacheKey = buildCacheKey(topic, recency);
 
   try {

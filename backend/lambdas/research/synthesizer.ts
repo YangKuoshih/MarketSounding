@@ -38,7 +38,8 @@ Respond with ONLY the JSON object. No explanation or markdown formatting.`;
 
   const body = JSON.stringify({
     anthropic_version: 'bedrock-2023-05-31',
-    max_tokens: 1024,
+    max_tokens: 2048,
+    temperature: 0,
     messages: [
       {
         role: 'user',

@@ -223,6 +223,30 @@ export function SimulationViewClient({ id, autoPrint = false }: { id: string; au
           </span>
         </div>
 
+        {/* Consensus + Trajectory */}
+        <section className="mb-8">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="rounded-lg border border-border bg-card p-5">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">
+                Consensus Score
+              </p>
+              <p className="text-4xl font-bold tabular-nums">
+                62<span className="text-xl text-muted-foreground font-normal">%</span>
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">Moderate — some divergence</p>
+            </div>
+            <div className="rounded-lg border border-border bg-card p-5">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">
+                Overall Trajectory
+              </p>
+              <p className="text-lg font-semibold mt-1 text-blue-400">Dovish</p>
+              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                Shifted dovish across rounds
+              </p>
+            </div>
+          </div>
+        </section>
+
         {/* H/D Spectrum */}
         <section className="mb-8">
           <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">
@@ -626,6 +650,32 @@ function buildTranscript(rounds: RoundData[]): string {
     .join("\n\n---\n\n");
 }
 
+function calcConsensus(reactions: ReactionData[]): number {
+  if (reactions.length < 2) return 100;
+  const scores = reactions.map((r) => r.hawkishDovishScore);
+  const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
+  const variance = scores.reduce((a, b) => a + (b - mean) ** 2, 0) / scores.length;
+  const stdDev = Math.sqrt(variance);
+  // Max possible stdDev on [-1,1] is 1.0; map to 0-100% inverted
+  return Math.round(Math.max(0, (1 - stdDev) * 100));
+}
+
+function calcTrajectoryLabel(rounds: SimulationView["rounds"]): { label: string; direction: "hawkish" | "dovish" | "neutral" | "split" } {
+  if (rounds.length < 2) return { label: "Insufficient data", direction: "neutral" };
+  const firstAvg = rounds[0].reactions.reduce((a, r) => a + r.hawkishDovishScore, 0) / rounds[0].reactions.length;
+  const lastAvg = rounds[rounds.length - 1].reactions.reduce((a, r) => a + r.hawkishDovishScore, 0) / rounds[rounds.length - 1].reactions.length;
+  const delta = lastAvg - firstAvg;
+  const finalAvg = lastAvg;
+  if (Math.abs(delta) < 0.05) {
+    if (finalAvg > 0.15) return { label: "Hawkish consensus — converged early", direction: "hawkish" };
+    if (finalAvg < -0.15) return { label: "Dovish consensus — converged early", direction: "dovish" };
+    return { label: "Neutral — consensus reached early", direction: "neutral" };
+  }
+  if (delta > 0.1) return { label: "Shifted hawkish across rounds", direction: "hawkish" };
+  if (delta < -0.1) return { label: "Shifted dovish across rounds", direction: "dovish" };
+  return { label: "Mixed — modest shift across rounds", direction: "split" };
+}
+
 function CompleteView({
   sim,
   showTranscript,
@@ -653,6 +703,13 @@ function CompleteView({
   }));
 
   const isFailed = sim.status === "failed";
+  const consensusScore = calcConsensus(reactions);
+  const { label: trajectoryLabel, direction: trajectoryDirection } = calcTrajectoryLabel(sim.rounds);
+
+  const trajectoryColor =
+    trajectoryDirection === "hawkish" ? "text-orange-400" :
+    trajectoryDirection === "dovish" ? "text-blue-400" :
+    "text-muted-foreground";
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -693,6 +750,41 @@ function CompleteView({
             )}
           </div>
         </div>
+
+        {/* Consensus + Trajectory summary — headline read before diving deeper */}
+        {!isFailed && reactions.length > 0 && (
+          <section className="mb-8">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-lg border border-border bg-card p-5">
+                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">
+                  Consensus Score
+                </p>
+                <p className="text-4xl font-bold tabular-nums">
+                  {consensusScore}
+                  <span className="text-xl text-muted-foreground font-normal">%</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {consensusScore >= 70
+                    ? "High — the Street agrees"
+                    : consensusScore >= 40
+                    ? "Moderate — some divergence"
+                    : "Low — Street is genuinely split"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-5">
+                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">
+                  Overall Trajectory
+                </p>
+                <p className={`text-lg font-semibold mt-1 ${trajectoryColor}`}>
+                  {trajectoryDirection.charAt(0).toUpperCase() + trajectoryDirection.slice(1)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                  {trajectoryLabel}
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="mb-8">
           <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">

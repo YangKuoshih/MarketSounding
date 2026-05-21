@@ -166,23 +166,6 @@ function AgentChatContent() {
     setInput("");
     setIsThinking(true);
 
-    const apiConfigured = !!process.env.NEXT_PUBLIC_API_URL;
-
-    if (!apiConfigured) {
-      setTimeout(() => {
-        const agentMsg: Message = {
-          id: `a-${Date.now()}`,
-          role: "agent",
-          agentId: selectedAgent.id,
-          content: generateMockResponse(selectedAgent, text),
-          timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev, agentMsg]);
-        setIsThinking(false);
-      }, 1200 + Math.random() * 800);
-      return;
-    }
-
     try {
       const apiMessages: ChatMessage[] = priorMessages
         .slice(1)
@@ -630,30 +613,3 @@ function MessageBubble({
   );
 }
 
-function generateMockResponse(agent: (typeof dealers)[0], _input: string): string {
-  const responses: Record<string, string[]> = {
-    gs: [
-      "Our models suggest the lagged effects of monetary policy are still working through the system. Forward-looking indicators are softening faster than headline prints suggest, which supports our view that the next move is a cut, not a hike.",
-      "Probabilistically, we'd assign 40% to a cut at the next meeting, conditional on the labor data. Our GS Financial Conditions Index is signaling that policy is restrictive enough.",
-    ],
-    jpm: [
-      "We take a more balanced view than consensus. Wage growth above 4% is inconsistent with the 2% target -- the labor market remains tight by historical standards. Our base case is hold through Q3.",
-      "We need clear evidence of labor market weakening before we move. JOLTS quits rate and payrolls breadth are the indicators we're watching most closely.",
-    ],
-    ms: [
-      "Our scenario analysis assigns 25% probability to an additional rate hike if core PCE stays above 2.8%. Financial conditions have eased meaningfully -- this is counterproductive to the Fed's objectives.",
-      "We're more hawkish than consensus. Tail risks from sticky shelter inflation and re-acceleration in services are not priced into the curve.",
-    ],
-    citi: [
-      "Recession risks are materially underpriced. Initial claims trending higher, ISM services contracting, and consumer confidence falling all point to an economy that needs rate relief sooner.",
-      "Three cuts by year-end is our base case. The data prints support our view that the economy is slowing faster than the Fed acknowledges.",
-    ],
-    bofa: [
-      "Our proprietary card spending data shows no signs of the slowdown others are forecasting. The savings drawdown narrative is overstated when you account for asset appreciation.",
-      "One cut maximum in 2026, and even that is data-dependent. Consumer resilience is the dominant factor in our view -- the economy is running hotter than headline indicators suggest.",
-    ],
-  };
-
-  const pool = responses[agent.id] || responses.gs;
-  return pool[Math.floor(Math.random() * pool.length)];
-}

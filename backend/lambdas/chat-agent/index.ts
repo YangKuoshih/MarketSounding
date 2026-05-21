@@ -140,8 +140,10 @@ function detectDealerIntent(userMessage: string): string | null {
   // Don't delegate if the question is asking to compare dealers or is about the app
   const isComparison = /\b(compare|vs\.?|versus|all dealers|each dealer|every dealer|5 dealers|five dealers)\b/.test(lower);
   const isAppQuestion = /\b(how does|how do|what is|explain|tell me about)\s+(the\s+)?(app|platform|marketbuzz|simulation|system)\b/.test(lower);
+  // Don't delegate graph analysis requests — Jarrett must handle these to emit the graph_query tool block
+  const isGraphQuery = /\b(shortest path|path between|highlight|centrality|most central|filter (graph|by|nodes)|subgraph|knowledge graph|show (me )?(the )?(graph|path|nodes|connections)|find path)\b/.test(lower);
 
-  if (isComparison || isAppQuestion) return null;
+  if (isComparison || isAppQuestion || isGraphQuery) return null;
 
   return matches[0];
 }

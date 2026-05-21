@@ -210,7 +210,7 @@ export default function ConsoleDashboardPage() {
         </div>
       </div>
 
-      {/* Recent soundings */}
+      {/* Recent simulations */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -219,7 +219,7 @@ export default function ConsoleDashboardPage() {
       >
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-            Recent Soundings
+            Recent Simulations
           </h2>
           <Link
             href="/console/history"
@@ -238,7 +238,7 @@ export default function ConsoleDashboardPage() {
           ) : recentSoundings.length === 0 ? (
             <div className="flex items-center gap-2 px-5 py-6 text-xs text-muted-foreground font-mono">
               <AlertCircle className="h-3.5 w-3.5" />
-              No simulations yet — run your first sounding above.
+              No simulations yet — run your first simulation above.
             </div>
           ) : (
             recentSoundings.map((sim, i) => (
