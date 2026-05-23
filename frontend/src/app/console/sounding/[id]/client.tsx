@@ -665,15 +665,23 @@ function calcTrajectoryLabel(rounds: SimulationView["rounds"]): { label: string;
   const firstAvg = rounds[0].reactions.reduce((a, r) => a + r.hawkishDovishScore, 0) / rounds[0].reactions.length;
   const lastAvg = rounds[rounds.length - 1].reactions.reduce((a, r) => a + r.hawkishDovishScore, 0) / rounds[rounds.length - 1].reactions.length;
   const delta = lastAvg - firstAvg;
-  const finalAvg = lastAvg;
-  if (Math.abs(delta) < 0.05) {
-    if (finalAvg > 0.15) return { label: "Hawkish consensus — converged early", direction: "hawkish" };
-    if (finalAvg < -0.15) return { label: "Dovish consensus — converged early", direction: "dovish" };
-    return { label: "Neutral — consensus reached early", direction: "neutral" };
+
+  // Direction is anchored to where the group ENDED UP, not just how much they moved.
+  // Delta is secondary — it describes how they got there.
+  if (lastAvg > 0.15) {
+    if (delta > 0.1) return { label: "Strengthened hawkish across rounds", direction: "hawkish" };
+    if (delta < -0.05) return { label: "Hawkish but softening across rounds", direction: "hawkish" };
+    return { label: "Hawkish — Street aligned from the start", direction: "hawkish" };
   }
+  if (lastAvg < -0.15) {
+    if (delta < -0.1) return { label: "Strengthened dovish across rounds", direction: "dovish" };
+    if (delta > 0.05) return { label: "Dovish but softening across rounds", direction: "dovish" };
+    return { label: "Dovish — Street aligned from the start", direction: "dovish" };
+  }
+  // Neutral final position — movement direction matters more here
   if (delta > 0.1) return { label: "Shifted hawkish across rounds", direction: "hawkish" };
   if (delta < -0.1) return { label: "Shifted dovish across rounds", direction: "dovish" };
-  return { label: "Mixed — modest shift across rounds", direction: "split" };
+  return { label: "Neutral — no clear directional lean", direction: "neutral" };
 }
 
 function CompleteView({

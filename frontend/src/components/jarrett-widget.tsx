@@ -156,7 +156,43 @@ export function JarrettWidget() {
         .filter((m) => m.role === "user")
         .map((m) => ({ role: "user", content: m.content }));
 
-      const fullMessage = `PAGE CONTEXT: ${context}\n\nUser question: ${text}`;
+      // Inject live simulation data so Jarrett can answer data questions
+      let dataContext = "";
+      try {
+        if (
+          pathname === "/console" ||
+          pathname.startsWith("/console/graph") ||
+          pathname.startsWith("/console/history")
+        ) {
+          const sims = await api.simulations.list();
+          if (sims.length > 0) {
+            const lines = sims.map((s) => {
+              const consensus = s.consensus != null ? `${Math.round(s.consensus * 100)}%` : "n/a";
+              const traj = s.trajectory && s.trajectory.length > 0
+                ? (s.trajectory[s.trajectory.length - 1] > 0.15 ? "hawkish" : s.trajectory[s.trajectory.length - 1] < -0.15 ? "dovish" : "neutral")
+                : "n/a";
+              return `- "${s.eventTitle}" | consensus: ${consensus} | trajectory: ${traj} | rounds: ${s.totalRounds} | status: ${s.status}`;
+            });
+            dataContext = `\n\nSIMULATION DATA (${sims.length} simulations run so far):\n${lines.join("\n")}`;
+          }
+        } else if (pathname.startsWith("/console/sounding/")) {
+          const simId = pathname.split("/console/sounding/")[1]?.split("/")[0];
+          if (simId && simId !== "new") {
+            const sim = await api.simulations.get(simId);
+            if (sim && sim.rounds.length > 0) {
+              const lastRound = sim.rounds[sim.rounds.length - 1];
+              const scores = lastRound.reactions.map((r) =>
+                `${r.personaId.toUpperCase()}: ${r.hawkishDovishScore > 0 ? "+" : ""}${r.hawkishDovishScore.toFixed(2)}`
+              ).join(", ");
+              dataContext = `\n\nCURRENT SIMULATION: "${sim.event?.title}" | ${sim.rounds.length} rounds | Final H/D scores: ${scores}`;
+            }
+          }
+        }
+      } catch {
+        // data fetch failure is non-critical — proceed without it
+      }
+
+      const fullMessage = `PAGE CONTEXT: ${context}${dataContext}\n\nUser question: ${text}`;
       const apiMessages: ChatMessage[] = [
         ...history,
         { role: "user", content: fullMessage },
