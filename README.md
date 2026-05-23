@@ -2,7 +2,7 @@
 
 **Multi-agent market intelligence platform.** Enter any macro event — FOMC rate decision, tariff shock, geopolitical crisis — and watch five primary dealer AI agents debate it in real time.
 
-![MarketBuzz Console Dashboard](01-dashboard.png)
+![MarketBuzz Console Dashboard](screenshots/01-dashboard.png)
 
 ---
 
@@ -18,15 +18,15 @@ The result is a structured picture of where the Street sits on any given event: 
 
 Jarrett is a context-aware AI assistant that lives in every page of the console. Ask it to explain results, compare dealer views, or launch a simulation directly from the chat. It knows what page you're on, what simulations you've run, and can drive the app — navigating to the Knowledge Graph and applying analysis automatically.
 
-![Jarrett chat open on the dashboard](02-jarrett-open.png)
+![Jarrett chat open on the dashboard](screenshots/02-jarrett-open.png)
 
 **New Simulation — research + launch in one step**
 
 Enter a topic or pick a sample event. The system searches live web sources, synthesises an event brief, and kicks off the multi-round dealer simulation. Tell Jarrett what you want to simulate and it fills the form and launches automatically.
 
-![New simulation configuration page](03-new-sim-page.png)
+![New simulation configuration page](screenshots/03-new-sim-page.png)
 
-![Jarrett launching a simulation via chat](04-jarrett-new-sim.png)
+![Jarrett launching a simulation via chat](screenshots/04-jarrett-new-sim.png)
 
 **Simulation results — H/D spectrum, position evolution, transcript**
 
@@ -36,7 +36,7 @@ Each completed simulation shows:
 - **Dealer Table** — per-dealer key quotes, confidence scores, and concerns
 - **Discussion Transcript** — the full multi-round debate narrative
 
-![Simulation running with live results](05-sim-launched.png)
+![Simulation running with live results](screenshots/05-sim-launched.png)
 
 **Knowledge Graph**
 
