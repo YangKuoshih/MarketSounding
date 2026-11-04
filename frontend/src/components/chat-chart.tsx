@@ -34,7 +34,7 @@ export function ChatChart({ spec }: { spec: ChartSpec }) {
         chart: { type: spec.type, backgroundColor: "transparent", height: 220 },
         title: { text: spec.title, style: { fontSize: "11px", fontWeight: "600", color: "var(--foreground)" } },
         xAxis: { categories: spec.xAxis, labels: { style: { fontSize: "10px", color: "var(--muted-foreground)" } } },
-        yAxis: { title: { text: null }, labels: { style: { fontSize: "10px", color: "var(--muted-foreground)" } }, gridLineColor: "var(--border)" },
+        yAxis: { title: { text: "" }, labels: { style: { fontSize: "10px", color: "var(--muted-foreground)" } }, gridLineColor: "var(--border)" },
         legend: { itemStyle: { fontSize: "10px", color: "var(--foreground)" } },
         series: spec.series.map((s) => ({ type: spec.type as "bar" | "line" | "column", name: s.name, data: s.data })),
         credits: { enabled: false },

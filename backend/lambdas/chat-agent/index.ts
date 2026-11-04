@@ -80,7 +80,7 @@ export const handler = withAuth(
 
     const parsed = ChatRequestSchema.safeParse(body);
     if (!parsed.success) {
-      return badRequest(parsed.error.errors[0]?.message || 'Invalid request');
+      return badRequest(parsed.error.issues[0]?.message || 'Invalid request');
     }
 
     const { messages } = parsed.data;
