@@ -54,7 +54,7 @@ async function handleRegister(event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   const parsed = authRequestSchema.safeParse(body);
   if (!parsed.success) {
-    const firstError = parsed.error.errors[0];
+    const firstError = parsed.error.issues[0];
     return badRequest(firstError.message);
   }
 
@@ -105,7 +105,7 @@ async function handleLogin(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
 
   const parsed = authRequestSchema.safeParse(body);
   if (!parsed.success) {
-    const firstError = parsed.error.errors[0];
+    const firstError = parsed.error.issues[0];
     return badRequest(firstError.message);
   }
 
